@@ -99,31 +99,18 @@ int uh_urldecode(char *buf, int blen, const char *src, int slen)
 
 	for (i = 0; (i < slen) && (len < blen); i++)
 	{
-		if (src[i] == '%')
-		{
-			if (((i+2) < slen) && isxdigit(src[i+1]) && isxdigit(src[i+2]))
-			{
-				buf[len++] = (char)(16 * hex(src[i+1]) + hex(src[i+2]));
-				i += 2;
-			}
-			else
-			{
-				/* Encoding error: it's hard to think of a
-				** scenario in which returning an incorrect
-				** 'decoding' of the malformed string is
-				** preferable to signaling an error condition. */
-				#if 0 /* WORSE_IS_BETTER */
-				    buf[len++] = '%';
-				#else
-				    return -2;
-				#endif
-			}
-		}
-		else
-		{
+		if (src[i] != '%') {
 			buf[len++] = src[i];
+			continue;
 		}
+
+		if (i + 2 >= slen || !isxdigit(src[i + 1]) || !isxdigit(src[i + 2]))
+			return -2;
+
+		buf[len++] = (char)(16 * hex(src[i+1]) + hex(src[i+2]));
+		i += 2;
 	}
+	buf[len] = 0;
 
 	return (i == slen) ? len : -1;
 }
