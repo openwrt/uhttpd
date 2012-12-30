@@ -167,7 +167,7 @@ int uh_socket_bind(const char *host, const char *port, bool tls)
 		continue;
 
 error:
-		if (sock > 0)
+		if (sock > -1)
 			close(sock);
 	}
 
