@@ -49,6 +49,13 @@ struct config {
 	int http_keepalive;
 };
 
+struct auth_realm {
+	struct list_head list;
+	char path[PATH_MAX];
+	char user[32];
+	char pass[128];
+};
+
 enum http_method {
 	UH_HTTP_MSG_GET,
 	UH_HTTP_MSG_POST,
@@ -145,5 +152,7 @@ void __printf(4, 5)
 uh_client_error(struct client *cl, int code, const char *summary, const char *fmt, ...);
 
 void uh_handle_file_request(struct client *cl);
+
+void uh_auth_add(const char *path, const char *user, const char *pass);
 
 #endif

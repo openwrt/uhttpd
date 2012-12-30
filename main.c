@@ -40,6 +40,64 @@ static int run_server(void)
 	return 0;
 }
 
+static void uh_config_parse(void)
+{
+	const char *path = conf.file;
+	FILE *c;
+	char line[512];
+	char *col1;
+	char *col2;
+	char *eol;
+
+	if (!path)
+		path = "/etc/httpd.conf";
+
+	c = fopen(path, "r");
+	if (!c)
+		return;
+
+	memset(line, 0, sizeof(line));
+
+	while (fgets(line, sizeof(line) - 1, c)) {
+		if ((line[0] == '/') && (strchr(line, ':') != NULL)) {
+			if (!(col1 = strchr(line, ':')) || (*col1++ = 0) ||
+				!(col2 = strchr(col1, ':')) || (*col2++ = 0) ||
+				!(eol = strchr(col2, '\n')) || (*eol++  = 0))
+				continue;
+
+			uh_auth_add(line, col1, col2);
+		} else if (!strncmp(line, "I:", 2)) {
+			if (!(col1 = strchr(line, ':')) || (*col1++ = 0) ||
+				!(eol = strchr(col1, '\n')) || (*eol++  = 0))
+				continue;
+
+			uh_index_add(strdup(col1));
+		} else if (!strncmp(line, "E404:", 5)) {
+			if (!(col1 = strchr(line, ':')) || (*col1++ = 0) ||
+				!(eol = strchr(col1, '\n')) || (*eol++  = 0))
+				continue;
+
+			conf.error_handler = strdup(col1);
+		}
+#ifdef HAVE_CGI
+		else if ((line[0] == '*') && (strchr(line, ':') != NULL)) {
+			if (!(col1 = strchr(line, '*')) || (*col1++ = 0) ||
+				!(col2 = strchr(col1, ':')) || (*col2++ = 0) ||
+				!(eol = strchr(col2, '\n')) || (*eol++  = 0))
+				continue;
+
+			if (!uh_interpreter_add(col1, col2))
+				fprintf(stderr,
+						"Unable to add interpreter %s for extension %s: "
+						"Out of memory\n", col2, col1
+				);
+		}
+#endif
+	}
+
+	fclose(c);
+}
+
 static void add_listener_arg(char *arg, bool tls)
 {
 	char *host = NULL;
@@ -101,6 +159,8 @@ int main(int argc, char **argv)
 			return usage(argv[0]);
 		}
 	}
+
+	uh_config_parse();
 
 	return run_server();
 }

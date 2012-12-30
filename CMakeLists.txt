@@ -8,5 +8,5 @@ IF(APPLE)
   LINK_DIRECTORIES(/opt/local/lib)
 ENDIF()
 
-ADD_EXECUTABLE(uhttpd main.c listen.c client.c utils.c file.c)
+ADD_EXECUTABLE(uhttpd main.c listen.c client.c utils.c file.c auth.c)
 TARGET_LINK_LIBRARIES(uhttpd ubox ubus)
