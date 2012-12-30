@@ -17,8 +17,13 @@
  *  limitations under the License.
  */
 
+#define _BSD_SOURCE
+#define _XOPEN_SOURCE 700
+
 #include <sys/types.h>
 #include <sys/dir.h>
+#include <time.h>
+#include <strings.h>
 
 #include <libubox/blobmsg.h>
 

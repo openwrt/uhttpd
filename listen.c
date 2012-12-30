@@ -19,7 +19,7 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
-
+#include <netinet/tcp.h>
 #include <netdb.h>
 
 #include "uhttpd.h"
@@ -124,7 +124,7 @@ int uh_socket_bind(const char *host, const char *port, bool tls)
 
 			tcp_ka_idl = 1;
 			tcp_ka_cnt = 3;
-			tcp_ka_int = conf->tcp_keepalive;
+			tcp_ka_int = conf.tcp_keepalive;
 			ret =	setsockopt(sock, SOL_TCP, TCP_KEEPIDLE,  &tcp_ka_idl, sizeof(tcp_ka_idl)) ||
 				setsockopt(sock, SOL_TCP, TCP_KEEPINTVL, &tcp_ka_int, sizeof(tcp_ka_int)) ||
 				setsockopt(sock, SOL_TCP, TCP_KEEPCNT,   &tcp_ka_cnt, sizeof(tcp_ka_cnt));
