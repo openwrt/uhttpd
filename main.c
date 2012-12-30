@@ -136,6 +136,7 @@ int main(int argc, char **argv)
 	bool nofork = false;
 	char *port;
 	int opt, ch;
+	int cur_fd;
 
 	init_defaults();
 	signal(SIGPIPE, SIG_IGN);
@@ -250,6 +251,32 @@ int main(int argc, char **argv)
 	}
 
 	uh_config_parse();
+
+	/* fork (if not disabled) */
+	if (!nofork) {
+		switch (fork()) {
+		case -1:
+			perror("fork()");
+			exit(1);
+
+		case 0:
+			/* daemon setup */
+			if (chdir("/"))
+				perror("chdir()");
+
+			cur_fd = open("/dev/null", O_WRONLY);
+			if (cur_fd > 0) {
+				dup2(cur_fd, 0);
+				dup2(cur_fd, 1);
+				dup2(cur_fd, 2);
+			}
+
+			break;
+
+		default:
+			exit(0);
+		}
+	}
 
 	return run_server();
 }
