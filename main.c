@@ -65,6 +65,7 @@ static void init_defaults(void)
 {
 	conf.network_timeout = 30;
 	conf.http_keepalive = 0; /* fixme */
+	conf.max_requests = 3;
 
 	uh_index_add("index.html");
 	uh_index_add("index.htm");
