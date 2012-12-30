@@ -133,28 +133,117 @@ static void init_defaults(void)
 
 int main(int argc, char **argv)
 {
-	int ch;
+	bool nofork = false;
+	char *port;
+	int opt, ch;
 
 	init_defaults();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "sp:h:")) != -1) {
+	while ((ch = getopt(argc, argv, "fSDRC:K:E:I:p:s:h:c:l:L:d:r:m:n:x:i:t:T:A:u:U:")) != -1) {
 		bool tls = false;
+
 		switch(ch) {
 		case 's':
 			tls = true;
+			/* fall through */
 		case 'p':
 			add_listener_arg(optarg, tls);
 			break;
 
 		case 'h':
-			/* docroot */
 			if (!realpath(optarg, conf.docroot)) {
 				fprintf(stderr, "Error: Invalid directory %s: %s\n",
 						optarg, strerror(errno));
 				exit(1);
 			}
 			break;
+
+		case 'E':
+			if (optarg[0] != '/') {
+				fprintf(stderr, "Error: Invalid error handler: %s\n",
+						optarg);
+				exit(1);
+			}
+			conf.error_handler = optarg;
+			break;
+
+		case 'I':
+			if (optarg[0] == '/') {
+				fprintf(stderr, "Error: Invalid index page: %s\n",
+						optarg);
+				exit(1);
+			}
+			uh_index_add(optarg);
+			break;
+
+		case 'S':
+			conf.no_symlinks = 1;
+			break;
+
+		case 'D':
+			conf.no_dirlists = 1;
+			break;
+
+		case 'R':
+			conf.rfc1918_filter = 1;
+			break;
+
+		case 'n':
+			conf.max_requests = atoi(optarg);
+			break;
+
+		case 't':
+			conf.script_timeout = atoi(optarg);
+			break;
+
+		case 'T':
+			conf.network_timeout = atoi(optarg);
+			break;
+
+		case 'A':
+			conf.tcp_keepalive = atoi(optarg);
+			break;
+
+		case 'f':
+			nofork = 1;
+			break;
+
+		case 'd':
+			port = alloca(strlen(optarg) + 1);
+			if (!port)
+				return -1;
+
+			/* "decode" plus to space to retain compat */
+			for (opt = 0; optarg[opt]; opt++)
+				if (optarg[opt] == '+')
+					optarg[opt] = ' ';
+
+			/* opt now contains strlen(optarg) -- no need to re-scan */
+			if (uh_urldecode(port, opt, optarg, opt) < 0) {
+				fprintf(stderr, "uhttpd: invalid encoding\n");
+				return -1;
+			}
+
+			printf("%s", port);
+			break;
+
+		/* basic auth realm */
+		case 'r':
+			conf.realm = optarg;
+			break;
+
+		/* md5 crypt */
+		case 'm':
+			printf("%s\n", crypt(optarg, "$1$"));
+			return 0;
+			break;
+
+		/* config file */
+		case 'c':
+			conf.file = optarg;
+			break;
+
 		default:
 			return usage(argv[0]);
 		}

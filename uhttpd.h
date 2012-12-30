@@ -47,6 +47,7 @@ struct config {
 	int tcp_keepalive;
 	int max_requests;
 	int http_keepalive;
+	int script_timeout;
 };
 
 struct auth_realm {
