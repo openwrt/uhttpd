@@ -51,12 +51,6 @@ void uh_http_header(struct client *cl, int code, const char *summary)
 		code, summary, conn, enc);
 }
 
-static void uh_client_error_header(struct client *cl, int code, const char *summary)
-{
-	uh_http_header(cl, code, summary);
-	ustream_printf(cl->us, "Content-Type: text/plain\r\n\r\n");
-}
-
 static void uh_connection_close(struct client *cl)
 {
 	cl->state = CLIENT_STATE_DONE;
@@ -92,18 +86,23 @@ uh_client_error(struct client *cl, int code, const char *summary, const char *fm
 {
 	va_list arg;
 
-	uh_client_error_header(cl, code, summary);
+	uh_http_header(cl, code, summary);
+	ustream_printf(cl->us, "Content-Type: text/html\r\n\r\n");
 
-	va_start(arg, fmt);
-	uh_chunk_vprintf(cl, fmt, arg);
-	va_end(arg);
+	uh_chunk_printf(cl, "<h1>%s</h1>", summary);
+
+	if (fmt) {
+		va_start(arg, fmt);
+		uh_chunk_vprintf(cl, fmt, arg);
+		va_end(arg);
+	}
 
 	uh_request_done(cl);
 }
 
 static void uh_header_error(struct client *cl, int code, const char *summary)
 {
-	uh_client_error(cl, code, summary, "%s", summary);
+	uh_client_error(cl, code, summary, NULL);
 	uh_connection_close(cl);
 }
 

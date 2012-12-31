@@ -70,7 +70,6 @@ static char * canonpath(const char *path, char *path_resolved)
 	char path_copy[PATH_MAX];
 	char *path_cpy = path_copy;
 	char *path_res = path_resolved;
-	struct stat s;
 
 	/* relative -> absolute */
 	if (*path != '/') {
@@ -122,11 +121,7 @@ next:
 
 	*path_res = '\0';
 
-	/* test access */
-	if (!stat(path_resolved, &s) && (s.st_mode & S_IROTH))
-		return path_resolved;
-
-	return NULL;
+	return path_resolved;
 }
 
 /* Returns NULL on error.
@@ -593,7 +588,7 @@ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
 	file_write_cb(cl);
 }
 
-static void uh_file_request(struct client *cl, struct path_info *pi)
+static void uh_file_request(struct client *cl, struct path_info *pi, const char *url)
 {
 	static const struct blobmsg_policy hdr_policy[__HDR_MAX] = {
 		[HDR_IF_MODIFIED_SINCE] = { "if-modified-since", BLOBMSG_TYPE_STRING },
@@ -608,14 +603,31 @@ static void uh_file_request(struct client *cl, struct path_info *pi)
 	blobmsg_parse(hdr_policy, __HDR_MAX, tb, blob_data(cl->hdr.head), blob_len(cl->hdr.head));
 
 	cl->data.file.hdr = tb;
-	if ((pi->stat.st_mode & S_IFREG) && ((fd = open(pi->phys, O_RDONLY)) > 0))
+
+	if (!(pi->stat.st_mode & S_IROTH))
+		goto error;
+
+	if (pi->stat.st_mode & S_IFREG) {
+		fd = open(pi->phys, O_RDONLY);
+		if (fd < 0)
+			goto error;
+
 		uh_file_data(cl, pi, fd);
-	else if ((pi->stat.st_mode & S_IFDIR) && !conf.no_dirlists)
+	} else if ((pi->stat.st_mode & S_IFDIR)) {
+		if (conf.no_dirlists)
+			goto error;
+
 		uh_file_dirlist(cl, pi);
-	else
-		uh_client_error(cl, 403, "Forbidden",
-				"Access to this resource is forbidden");
-	cl->data.file.hdr = NULL;
+	} else {
+		goto error;
+	}
+
+	return;
+
+error:
+	uh_client_error(cl, 403, "Forbidden",
+			"You don't have permission to access %s on this server.",
+			url);
 }
 
 static bool __handle_file_request(struct client *cl, const char *url)
@@ -626,8 +638,10 @@ static bool __handle_file_request(struct client *cl, const char *url)
 	if (!pi)
 		return false;
 
-	if (!pi->redirected)
-		uh_file_request(cl, pi);
+	if (!pi->redirected) {
+		uh_file_request(cl, pi, url);
+		cl->data.file.hdr = NULL;
+	}
 
 	return true;
 }
@@ -638,5 +652,5 @@ void uh_handle_file_request(struct client *cl)
 	    __handle_file_request(cl, conf.error_handler))
 		return;
 
-	uh_client_error(cl, 404, "Not Found", "No such file or directory");
+	uh_client_error(cl, 404, "Not Found", "The requested URL %s was not found on this server.", cl->request.url);
 }
