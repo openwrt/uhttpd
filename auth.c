@@ -26,6 +26,7 @@ void uh_auth_add(const char *path, const char *user, const char *pass)
 	struct auth_realm *new = NULL;
 	struct passwd *pwd;
 	const char *new_pass = NULL;
+	char *dest_path, *dest_user, *dest_pass;
 
 #ifdef HAVE_SHADOW
 	struct spwd *spwd;
@@ -52,12 +53,16 @@ void uh_auth_add(const char *path, const char *user, const char *pass)
 	if (!new_pass || !new_pass[0])
 		return;
 
-	new = calloc(1, sizeof(*new));
+	new = calloc_a(sizeof(*new),
+		&dest_path, strlen(path) + 1,
+		&dest_user, strlen(user) + 1,
+		&dest_pass, strlen(new_pass) + 1);
+
 	if (!new)
 		return;
 
-	snprintf(new->path, sizeof(new->path), "%s", path);
-	snprintf(new->user, sizeof(new->user), "%s", user);
-	snprintf(new->pass, sizeof(new->user), "%s", new_pass);
+	new->path = strcpy(dest_path, path);
+	new->user = strcpy(dest_user, user);
+	new->pass = strcpy(dest_pass, new_pass);
 	list_add(&new->list, &auth_realms);
 }

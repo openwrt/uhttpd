@@ -28,6 +28,7 @@
 #include <libubox/uloop.h>
 #include <libubox/ustream.h>
 #include <libubox/blob.h>
+#include <libubox/utils.h>
 
 #include "utils.h"
 
@@ -52,9 +53,9 @@ struct config {
 
 struct auth_realm {
 	struct list_head list;
-	char path[PATH_MAX];
-	char user[32];
-	char pass[128];
+	char *path;
+	char *user;
+	char *pass;
 };
 
 enum http_method {
