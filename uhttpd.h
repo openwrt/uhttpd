@@ -102,12 +102,7 @@ struct client {
 #ifdef HAVE_TLS
 	struct ustream_ssl stream_ssl;
 #endif
-	struct uloop_fd rpipe;
-	struct uloop_fd wpipe;
-	struct uloop_process proc;
 	struct uloop_timeout timeout;
-	bool (*cb)(struct client *);
-	void *priv;
 
 	enum client_state state;
 
