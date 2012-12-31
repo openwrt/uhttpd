@@ -115,7 +115,44 @@ static void add_listener_arg(char *arg, bool tls)
 
 static int usage(const char *name)
 {
-	fprintf(stderr, "Usage: %s -p <port>\n", name);
+	fprintf(stderr,
+		"Usage: %s -p [addr:]port -h docroot\n"
+		"	-f              Do not fork to background\n"
+		"	-c file         Configuration file, default is '/etc/httpd.conf'\n"
+		"	-p [addr:]port  Bind to specified address and port, multiple allowed\n"
+#ifdef HAVE_TLS
+		"	-s [addr:]port  Like -p but provide HTTPS on this port\n"
+		"	-C file         ASN.1 server certificate file\n"
+		"	-K file         ASN.1 server private key file\n"
+#endif
+		"	-h directory    Specify the document root, default is '.'\n"
+		"	-E string       Use given virtual URL as 404 error handler\n"
+		"	-I string       Use given filename as index for directories, multiple allowed\n"
+		"	-S              Do not follow symbolic links outside of the docroot\n"
+		"	-D              Do not allow directory listings, send 403 instead\n"
+		"	-R              Enable RFC1918 filter\n"
+		"	-n count        Maximum allowed number of concurrent requests\n"
+#ifdef HAVE_LUA
+		"	-l string       URL prefix for Lua handler, default is '/lua'\n"
+		"	-L file         Lua handler script, omit to disable Lua\n"
+#endif
+#ifdef HAVE_UBUS
+		"	-u string       URL prefix for HTTP/JSON handler\n"
+		"	-U file         Override ubus socket path\n"
+#endif
+#ifdef HAVE_CGI
+		"	-x string       URL prefix for CGI handler, default is '/cgi-bin'\n"
+		"	-i .ext=path    Use interpreter at path for files with the given extension\n"
+#endif
+#if defined(HAVE_CGI) || defined(HAVE_LUA) || defined(HAVE_UBUS)
+		"	-t seconds      CGI, Lua and UBUS script timeout in seconds, default is 60\n"
+#endif
+		"	-T seconds      Network timeout in seconds, default is 30\n"
+		"	-d string       URL decode given string\n"
+		"	-r string       Specify basic auth realm\n"
+		"	-m string       MD5 crypt given string\n"
+		"\n", name
+	);
 	return 1;
 }
 
