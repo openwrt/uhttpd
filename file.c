@@ -618,18 +618,25 @@ static void uh_file_request(struct client *cl, struct path_info *pi)
 	cl->data.file.hdr = NULL;
 }
 
-void uh_handle_file_request(struct client *cl)
+static bool __handle_file_request(struct client *cl, const char *url)
 {
 	struct path_info *pi;
 
-	pi = uh_path_lookup(cl, cl->request.url);
-	if (!pi) {
-		uh_request_done(cl);
-		return;
-	}
+	pi = uh_path_lookup(cl, url);
+	if (!pi)
+		return false;
 
-	if (pi->redirected)
+	if (!pi->redirected)
+		uh_file_request(cl, pi);
+
+	return true;
+}
+
+void uh_handle_file_request(struct client *cl)
+{
+	if (__handle_file_request(cl, cl->request.url) ||
+	    __handle_file_request(cl, conf.error_handler))
 		return;
 
-	uh_file_request(cl, pi);
+	uh_client_error(cl, 404, "Not Found", "No such file or directory");
 }
