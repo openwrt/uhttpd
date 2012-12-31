@@ -164,6 +164,7 @@ static void init_defaults(void)
 	conf.http_keepalive = 0; /* fixme */
 	conf.max_requests = 3;
 	conf.realm = "Protected Area";
+	conf.cgi_prefix = "/cgi-bin";
 
 	uh_index_add("index.html");
 	uh_index_add("index.htm");

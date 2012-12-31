@@ -41,6 +41,7 @@ struct config {
 	char *realm;
 	char *file;
 	char *error_handler;
+	char *cgi_prefix;
 	int no_symlinks;
 	int no_dirlists;
 	int network_timeout;
