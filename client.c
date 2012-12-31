@@ -263,6 +263,7 @@ static void client_close(struct client *cl)
 	ustream_free(&cl->sfd.stream);
 	close(cl->sfd.fd.fd);
 	list_del(&cl->list);
+	blob_buf_free(&cl->hdr);
 	free(cl);
 
 	uh_unblock_listeners();
