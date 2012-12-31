@@ -75,8 +75,28 @@ static void listener_cb(struct uloop_fd *fd, unsigned int events)
 void uh_setup_listeners(void)
 {
 	struct listener *l;
+	int yes = 1;
 
 	list_for_each_entry(l, &listeners, list) {
+		int sock = l->fd.fd;
+
+		/* TCP keep-alive */
+		if (conf.tcp_keepalive > 0) {
+#ifdef linux
+			int tcp_ka_idl, tcp_ka_int, tcp_ka_cnt;
+
+			tcp_ka_idl = 1;
+			tcp_ka_cnt = 3;
+			tcp_ka_int = conf.tcp_keepalive;
+
+			setsockopt(sock, SOL_TCP, TCP_KEEPIDLE,  &tcp_ka_idl, sizeof(tcp_ka_idl));
+			setsockopt(sock, SOL_TCP, TCP_KEEPINTVL, &tcp_ka_int, sizeof(tcp_ka_int));
+			setsockopt(sock, SOL_TCP, TCP_KEEPCNT,   &tcp_ka_cnt, sizeof(tcp_ka_cnt));
+#endif
+
+			setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(yes));
+		}
+
 		l->fd.cb = listener_cb;
 		uloop_fd_add(&l->fd, ULOOP_READ);
 	}
@@ -114,25 +134,6 @@ int uh_socket_bind(const char *host, const char *port, bool tls)
 		if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes))) {
 			perror("setsockopt()");
 			goto error;
-		}
-
-		/* TCP keep-alive */
-		if (conf.tcp_keepalive > 0) {
-			int ret = 0;
-#ifdef linux
-			int tcp_ka_idl, tcp_ka_int, tcp_ka_cnt;
-
-			tcp_ka_idl = 1;
-			tcp_ka_cnt = 3;
-			tcp_ka_int = conf.tcp_keepalive;
-			ret =	setsockopt(sock, SOL_TCP, TCP_KEEPIDLE,  &tcp_ka_idl, sizeof(tcp_ka_idl)) ||
-				setsockopt(sock, SOL_TCP, TCP_KEEPINTVL, &tcp_ka_int, sizeof(tcp_ka_int)) ||
-				setsockopt(sock, SOL_TCP, TCP_KEEPCNT,   &tcp_ka_cnt, sizeof(tcp_ka_cnt));
-#endif
-
-			if (ret || setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(yes)))
-				fprintf(stderr, "Notice: Unable to enable TCP keep-alive: %s\n",
-					strerror(errno));
 		}
 
 		/* required to get parallel v4 + v6 working */
