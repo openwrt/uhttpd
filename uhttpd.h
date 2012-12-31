@@ -119,6 +119,7 @@ struct client {
 	struct blob_buf hdr;
 
 	void (*dispatch_write_cb)(struct client *cl);
+	void (*dispatch_close_fds)(struct client *cl);
 	void (*dispatch_free)(struct client *cl);
 
 	union {
@@ -157,5 +158,8 @@ uh_client_error(struct client *cl, int code, const char *summary, const char *fm
 void uh_handle_file_request(struct client *cl);
 
 void uh_auth_add(const char *path, const char *user, const char *pass);
+
+void uh_close_listen_fds(void);
+void uh_close_fds(void);
 
 #endif

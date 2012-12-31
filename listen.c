@@ -37,6 +37,14 @@ struct listener {
 static LIST_HEAD(listeners);
 static int n_blocked;
 
+void uh_close_listen_fds(void)
+{
+	struct listener *l;
+
+	list_for_each_entry(l, &listeners, list)
+		close(l->fd.fd);
+}
+
 static void uh_block_listener(struct listener *l)
 {
 	uloop_fd_delete(&l->fd);

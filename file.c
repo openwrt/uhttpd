@@ -127,7 +127,8 @@ next:
 /* Returns NULL on error.
 ** NB: improperly encoded URL should give client 400 [Bad Syntax]; returning
 ** NULL here causes 404 [Not Found], but that's not too unreasonable. */
-struct path_info * uh_path_lookup(struct client *cl, const char *url)
+static struct path_info *
+uh_path_lookup(struct client *cl, const char *url)
 {
 	static char path_phys[PATH_MAX];
 	static char path_info[PATH_MAX];
@@ -585,6 +586,7 @@ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
 	cl->data.file.fd = fd;
 	cl->dispatch_write_cb = file_write_cb;
 	cl->dispatch_free = uh_file_free;
+	cl->dispatch_close_fds = uh_file_free;
 	file_write_cb(cl);
 }
 

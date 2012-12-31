@@ -63,6 +63,7 @@ static void uh_dispatch_done(struct client *cl)
 	if (cl->dispatch_free)
 		cl->dispatch_free(cl);
 	cl->dispatch_free = NULL;
+	cl->dispatch_close_fds = NULL;
 }
 
 void uh_request_done(struct client *cl)
@@ -328,4 +329,17 @@ void uh_accept_client(int fd)
 	next_client = NULL;
 	n_clients++;
 	cl->id = client_id++;
+}
+
+void uh_close_fds(void)
+{
+	struct client *cl;
+
+	uloop_done();
+	uh_close_listen_fds();
+	list_for_each_entry(cl, &clients, list) {
+		close(cl->sfd.fd.fd);
+		if (cl->dispatch_close_fds)
+			cl->dispatch_close_fds(cl);
+	}
 }
