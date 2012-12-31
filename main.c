@@ -98,7 +98,7 @@ static void uh_config_parse(void)
 	fclose(c);
 }
 
-static void add_listener_arg(char *arg, bool tls)
+static int add_listener_arg(char *arg, bool tls)
 {
 	char *host = NULL;
 	char *port = arg;
@@ -110,7 +110,8 @@ static void add_listener_arg(char *arg, bool tls)
 		port = s + 1;
 		*s = 0;
 	}
-	uh_socket_bind(host, port, tls);
+
+	return uh_socket_bind(host, port, tls);
 }
 
 static int usage(const char *name)
@@ -174,6 +175,7 @@ int main(int argc, char **argv)
 	char *port;
 	int opt, ch;
 	int cur_fd;
+	int bound = 0;
 
 	init_defaults();
 	signal(SIGPIPE, SIG_IGN);
@@ -186,7 +188,7 @@ int main(int argc, char **argv)
 			tls = true;
 			/* fall through */
 		case 'p':
-			add_listener_arg(optarg, tls);
+			bound += add_listener_arg(optarg, tls);
 			break;
 
 		case 'h':
@@ -288,6 +290,11 @@ int main(int argc, char **argv)
 	}
 
 	uh_config_parse();
+
+	if (!bound) {
+		fprintf(stderr, "Error: No sockets bound, unable to continue\n");
+		return 1;
+	}
 
 	/* fork (if not disabled) */
 	if (!nofork) {

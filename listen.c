@@ -98,7 +98,7 @@ int uh_socket_bind(const char *host, const char *port, bool tls)
 
 	if ((status = getaddrinfo(host, port, &hints, &addrs)) != 0) {
 		fprintf(stderr, "getaddrinfo(): %s\n", gai_strerror(status));
-		return -1;
+		return 0;
 	}
 
 	/* try to bind a new socket to each found address */
@@ -163,6 +163,7 @@ int uh_socket_bind(const char *host, const char *port, bool tls)
 		l->fd.fd = sock;
 		l->tls = tls;
 		list_add_tail(&l->list, &listeners);
+		bound++;
 
 		continue;
 
