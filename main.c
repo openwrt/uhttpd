@@ -159,6 +159,7 @@ static int usage(const char *name)
 
 static void init_defaults(void)
 {
+	conf.script_timeout = 60;
 	conf.network_timeout = 30;
 	conf.http_keepalive = 0; /* fixme */
 	conf.max_requests = 3;
