@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.6)
 
 PROJECT(uhttpd C)
-ADD_DEFINITIONS(-Os -Wall -Werror --std=gnu99 -g3)
+ADD_DEFINITIONS(-Os -Wall -Werror -Wmissing-declarations --std=gnu99 -g3)
 
 IF(APPLE)
   INCLUDE_DIRECTORIES(/opt/local/include)
