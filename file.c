@@ -315,10 +315,10 @@ static char * uh_file_unix2date(time_t ts)
 
 static char *uh_file_header(struct client *cl, int idx)
 {
-	if (!cl->data.file.hdr[idx])
+	if (!cl->dispatch.file.hdr[idx])
 		return NULL;
 
-	return (char *) blobmsg_data(cl->data.file.hdr[idx]);
+	return (char *) blobmsg_data(cl->dispatch.file.hdr[idx]);
 }
 
 static void uh_file_response_ok_hdrs(struct client *cl, struct stat *s)
@@ -529,7 +529,7 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 static void file_write_cb(struct client *cl)
 {
 	char buf[512];
-	int fd = cl->data.file.fd;
+	int fd = cl->dispatch.file.fd;
 	int r;
 
 	while (cl->us->w.data_bytes < 256) {
@@ -550,7 +550,7 @@ static void file_write_cb(struct client *cl)
 
 static void uh_file_free(struct client *cl)
 {
-	close(cl->data.file.fd);
+	close(cl->dispatch.file.fd);
 }
 
 static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
@@ -583,10 +583,10 @@ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
 		return;
 	}
 
-	cl->data.file.fd = fd;
-	cl->dispatch_write_cb = file_write_cb;
-	cl->dispatch_free = uh_file_free;
-	cl->dispatch_close_fds = uh_file_free;
+	cl->dispatch.file.fd = fd;
+	cl->dispatch.write_cb = file_write_cb;
+	cl->dispatch.free = uh_file_free;
+	cl->dispatch.close_fds = uh_file_free;
 	file_write_cb(cl);
 }
 
@@ -604,7 +604,7 @@ static void uh_file_request(struct client *cl, struct path_info *pi, const char 
 
 	blobmsg_parse(hdr_policy, __HDR_MAX, tb, blob_data(cl->hdr.head), blob_len(cl->hdr.head));
 
-	cl->data.file.hdr = tb;
+	cl->dispatch.file.hdr = tb;
 
 	if (!(pi->stat.st_mode & S_IROTH))
 		goto error;
@@ -642,7 +642,7 @@ static bool __handle_file_request(struct client *cl, const char *url)
 
 	if (!pi->redirected) {
 		uh_file_request(cl, pi, url);
-		cl->data.file.hdr = NULL;
+		cl->dispatch.file.hdr = NULL;
 	}
 
 	return true;

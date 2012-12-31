@@ -118,16 +118,17 @@ struct client {
 
 	struct blob_buf hdr;
 
-	void (*dispatch_write_cb)(struct client *cl);
-	void (*dispatch_close_fds)(struct client *cl);
-	void (*dispatch_free)(struct client *cl);
-
-	union {
-		struct {
-			struct blob_attr **hdr;
-			int fd;
-		} file;
-	} data;
+	struct {
+		void (*write_cb)(struct client *cl);
+		void (*close_fds)(struct client *cl);
+		void (*free)(struct client *cl);
+		union {
+			struct {
+				struct blob_attr **hdr;
+				int fd;
+			} file;
+		};
+	} dispatch;
 };
 
 extern int n_clients;

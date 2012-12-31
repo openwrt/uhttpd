@@ -60,10 +60,8 @@ static void uh_connection_close(struct client *cl)
 
 static void uh_dispatch_done(struct client *cl)
 {
-	if (cl->dispatch_free)
-		cl->dispatch_free(cl);
-	cl->dispatch_free = NULL;
-	cl->dispatch_close_fds = NULL;
+	if (cl->dispatch.free)
+		cl->dispatch.free(cl);
 }
 
 void uh_request_done(struct client *cl)
@@ -71,7 +69,7 @@ void uh_request_done(struct client *cl)
 	uh_chunk_eof(cl);
 	uh_dispatch_done(cl);
 	cl->us->notify_write = NULL;
-	memset(&cl->data, 0, sizeof(cl->data));
+	memset(&cl->dispatch, 0, sizeof(cl->dispatch));
 
 	if (cl->request.version != UH_HTTP_VER_1_1 || !conf.http_keepalive) {
 		uh_connection_close(cl);
@@ -281,8 +279,8 @@ static void client_ustream_write_cb(struct ustream *s, int bytes)
 {
 	struct client *cl = container_of(s, struct client, sfd);
 
-	if (cl->dispatch_write_cb)
-		cl->dispatch_write_cb(cl);
+	if (cl->dispatch.write_cb)
+		cl->dispatch.write_cb(cl);
 }
 
 static void client_notify_state(struct ustream *s)
@@ -339,7 +337,7 @@ void uh_close_fds(void)
 	uh_close_listen_fds();
 	list_for_each_entry(cl, &clients, list) {
 		close(cl->sfd.fd.fd);
-		if (cl->dispatch_close_fds)
-			cl->dispatch_close_fds(cl);
+		if (cl->dispatch.close_fds)
+			cl->dispatch.close_fds(cl);
 	}
 }
