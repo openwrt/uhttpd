@@ -169,7 +169,7 @@ static void proc_handle_header(struct relay *r, const char *name, const char *va
 	char *sep;
 	char buf[4];
 
-	if (strcmp(name, "Status")) {
+	if (!strcmp(name, "Status")) {
 		sep = strchr(val, ' ');
 		if (sep != val + 3)
 			return;
