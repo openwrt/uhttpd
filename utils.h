@@ -56,5 +56,6 @@ int uh_urldecode(char *buf, int blen, const char *src, int slen);
 int uh_urlencode(char *buf, int blen, const char *src, int slen);
 int uh_b64decode(char *buf, int blen, const unsigned char *src, int slen);
 bool uh_path_match(const char *prefix, const char *url);
+char *uh_split_header(char *str);
 
 #endif

@@ -199,3 +199,20 @@ bool uh_path_match(const char *prefix, const char *url)
 
 	return url[len] == '/' || url[len] == 0;
 }
+
+char *uh_split_header(char *str)
+{
+	char *val;
+
+	val = strchr(str, ':');
+	if (!val)
+		return NULL;
+
+	*val = 0;
+	val++;
+
+	while (isspace(*val))
+		val++;
+
+	return val;
+}

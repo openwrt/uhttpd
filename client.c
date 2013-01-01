@@ -188,15 +188,9 @@ static int client_parse_header(struct client *cl, char *data)
 		return CLIENT_STATE_DATA;
 	}
 
-	val = strchr(data, ':');
+	val = uh_split_header(data);
 	if (!val)
 		return CLIENT_STATE_DONE;
-
-	*val = 0;
-	val++;
-
-	while (isspace(*val))
-		val++;
 
 	for (name = data; *name; name++)
 		if (isupper(*name))
