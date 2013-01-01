@@ -149,12 +149,10 @@ int uh_urlencode(char *buf, int blen, const char *src, int slen)
 
 int uh_b64decode(char *buf, int blen, const unsigned char *src, int slen)
 {
-	int i = 0;
-	int len = 0;
-
-	unsigned int cin  = 0;
 	unsigned int cout = 0;
-
+	unsigned int cin  = 0;
+	int len = 0;
+	int i = 0;
 
 	for (i = 0; (i <= slen) && (src[i] != 0); i++)
 	{
@@ -177,19 +175,15 @@ int uh_b64decode(char *buf, int blen, const unsigned char *src, int slen)
 
 		cout = (cout << 6) | cin;
 
-		if ((i % 4) == 3)
-		{
-			if ((len + 3) < blen)
-			{
-				buf[len++] = (char)(cout >> 16);
-				buf[len++] = (char)(cout >> 8);
-				buf[len++] = (char)(cout);
-			}
-			else
-			{
-				break;
-			}
-		}
+		if ((i % 4) != 3)
+			continue;
+
+		if ((len + 3) >= blen)
+			break;
+
+		buf[len++] = (char)(cout >> 16);
+		buf[len++] = (char)(cout >> 8);
+		buf[len++] = (char)(cout);
 	}
 
 	buf[len++] = 0;
