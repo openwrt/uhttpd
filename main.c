@@ -142,13 +142,9 @@ static int usage(const char *name)
 		"	-u string       URL prefix for HTTP/JSON handler\n"
 		"	-U file         Override ubus socket path\n"
 #endif
-#ifdef HAVE_CGI
 		"	-x string       URL prefix for CGI handler, default is '/cgi-bin'\n"
 		"	-i .ext=path    Use interpreter at path for files with the given extension\n"
-#endif
-#if defined(HAVE_CGI) || defined(HAVE_LUA) || defined(HAVE_UBUS)
 		"	-t seconds      CGI, Lua and UBUS script timeout in seconds, default is 60\n"
-#endif
 		"	-T seconds      Network timeout in seconds, default is 30\n"
 		"	-d string       URL decode given string\n"
 		"	-r string       Specify basic auth realm\n"
@@ -174,6 +170,21 @@ static void init_defaults(void)
 	uh_index_add("default.htm");
 }
 
+static void fixup_prefix(char *str)
+{
+	int len;
+
+	if (!str || !str[0])
+		return;
+
+	len = strlen(str) - 1;
+
+	while (len > 0 && str[len] == '/')
+		len--;
+
+	str[len + 1] = 0;
+}
+
 int main(int argc, char **argv)
 {
 	bool nofork = false;
@@ -184,6 +195,7 @@ int main(int argc, char **argv)
 
 	BUILD_BUG_ON(sizeof(uh_buf) < PATH_MAX);
 
+	uh_dispatch_add(&cgi_dispatch);
 	init_defaults();
 	signal(SIGPIPE, SIG_IGN);
 
@@ -239,6 +251,23 @@ int main(int argc, char **argv)
 
 		case 'n':
 			conf.max_requests = atoi(optarg);
+			break;
+
+		case 'x':
+			fixup_prefix(optarg);
+			conf.cgi_prefix = optarg;
+			break;
+
+		case 'i':
+			port = strchr(optarg, '=');
+			if (optarg[0] != '.' || !port) {
+				fprintf(stderr, "Error: Invalid interpreter: %s\n",
+						optarg);
+				exit(1);
+			}
+
+			*port++ = 0;
+			uh_interpreter_add(optarg, port);
 			break;
 
 		case 't':

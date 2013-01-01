@@ -174,7 +174,7 @@ static bool client_init_cb(struct client *cl, char *buf, int len)
 
 static void client_header_complete(struct client *cl)
 {
-	uh_handle_file_request(cl);
+	uh_handle_request(cl);
 }
 
 static int client_parse_header(struct client *cl, char *data)

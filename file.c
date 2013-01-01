@@ -32,6 +32,7 @@
 
 static char _tag[128];
 static LIST_HEAD(index_files);
+static LIST_HEAD(dispatch_handlers);
 
 struct index_file {
 	struct list_head list;
@@ -577,7 +578,7 @@ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
 	file_write_cb(cl);
 }
 
-static void uh_file_request(struct client *cl, struct path_info *pi, const char *url)
+static void uh_file_request(struct client *cl, const char *url, struct path_info *pi)
 {
 	static const struct blobmsg_policy hdr_policy[__HDR_MAX] = {
 		[HDR_IF_MODIFIED_SINCE] = { "if-modified-since", BLOBMSG_TYPE_STRING },
@@ -611,33 +612,78 @@ static void uh_file_request(struct client *cl, struct path_info *pi, const char 
 		goto error;
 	}
 
+	cl->dispatch.file.hdr = NULL;
 	return;
 
 error:
 	uh_client_error(cl, 403, "Forbidden",
 			"You don't have permission to access %s on this server.",
 			url);
+	cl->dispatch.file.hdr = NULL;
+}
+
+void uh_dispatch_add(struct dispatch_handler *d)
+{
+	list_add_tail(&d->list, &dispatch_handlers);
+}
+
+static struct dispatch_handler *
+dispatch_find(const char *url, struct path_info *pi)
+{
+	struct dispatch_handler *d;
+
+	list_for_each_entry(d, &dispatch_handlers, list) {
+		if (pi) {
+			if (d->check_url)
+				continue;
+
+			if (d->check_path(pi, url))
+				return d;
+		} else {
+			if (d->check_path)
+				continue;
+
+			if (d->check_url(url))
+				return d;
+		}
+	}
+
+	return NULL;
 }
 
 static bool __handle_file_request(struct client *cl, const char *url)
 {
+	struct dispatch_handler *d;
 	struct path_info *pi;
 
 	pi = uh_path_lookup(cl, url);
 	if (!pi)
 		return false;
 
-	if (!pi->redirected) {
-		uh_file_request(cl, pi, url);
-		cl->dispatch.file.hdr = NULL;
-	}
+	if (pi->redirected)
+		return true;
+
+	d = dispatch_find(url, pi);
+	if (d)
+		d->handle_request(cl, url, pi);
+	else
+		uh_file_request(cl, url, pi);
 
 	return true;
 }
 
-void uh_handle_file_request(struct client *cl)
+void uh_handle_request(struct client *cl)
 {
-	if (__handle_file_request(cl, cl->request.url) ||
+	struct dispatch_handler *d;
+	const char *url = cl->request.url;
+
+	d = dispatch_find(url, NULL);
+	if (d) {
+		d->handle_request(cl, url, NULL);
+		return;
+	}
+
+	if (__handle_file_request(cl, url) ||
 	    __handle_file_request(cl, conf.error_handler))
 		return;
 

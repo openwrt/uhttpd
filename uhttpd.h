@@ -35,6 +35,11 @@
 #define UH_LIMIT_CLIENTS	64
 #define UH_LIMIT_HEADERS	64
 
+#define __enum_header(_name) HDR_##_name,
+#define __blobmsg_header(_name) [HDR_##_name] = { .name = #_name, .type = BLOBMSG_TYPE_STRING },
+
+struct client;
+
 struct config {
 	const char *docroot;
 	const char *realm;
@@ -50,16 +55,6 @@ struct config {
 	int max_requests;
 	int http_keepalive;
 	int script_timeout;
-};
-
-struct path_info {
-	const char *root;
-	const char *phys;
-	const char *name;
-	const char *info;
-	const char *query;
-	int redirected;
-	struct stat stat;
 };
 
 struct auth_realm {
@@ -89,18 +84,56 @@ struct http_request {
 	const struct auth_realm *realm;
 };
 
-struct http_response {
-	int statuscode;
-	char *statusmsg;
-	char *headers[UH_LIMIT_HEADERS];
-};
-
 enum client_state {
 	CLIENT_STATE_INIT,
 	CLIENT_STATE_HEADER,
 	CLIENT_STATE_DATA,
 	CLIENT_STATE_DONE,
 	CLIENT_STATE_CLOSE,
+};
+
+struct interpreter {
+	struct list_head list;
+	char *path;
+	char *ext;
+};
+
+struct path_info {
+	const char *root;
+	const char *phys;
+	const char *name;
+	const char *info;
+	const char *query;
+	int redirected;
+	struct stat stat;
+	struct interpreter *ip;
+};
+
+struct env_var {
+	const char *name;
+	const char *value;
+};
+
+struct relay {
+	struct ustream_fd sfd;
+	struct uloop_process proc;
+	struct client *cl;
+
+	bool process_done;
+	int ret;
+	int header_ofs;
+
+	void (*header_cb)(struct relay *r, const char *name, const char *value);
+	void (*header_end)(struct relay *r);
+	void (*close)(struct relay *r, int ret);
+};
+
+struct dispatch_handler {
+	struct list_head list;
+
+	bool (*check_url)(const char *url);
+	bool (*check_path)(struct path_info *pi, const char *url);
+	void (*handle_request)(struct client *cl, const char *url, struct path_info *pi);
 };
 
 struct client {
@@ -117,7 +150,6 @@ struct client {
 	enum client_state state;
 
 	struct http_request request;
-	struct http_response response;
 	struct sockaddr_in6 servaddr;
 	struct sockaddr_in6 peeraddr;
 
@@ -132,6 +164,12 @@ struct client {
 				struct blob_attr **hdr;
 				int fd;
 			} file;
+			struct {
+				struct blob_buf hdr;
+				struct relay r;
+				int status_code;
+				char *status_msg;
+			} proc;
 		};
 	} dispatch;
 };
@@ -141,6 +179,7 @@ extern int n_clients;
 extern struct config conf;
 extern const char * const http_versions[];
 extern const char * const http_methods[];
+extern struct dispatch_handler cgi_dispatch;
 
 void uh_index_add(const char *filename);
 
@@ -164,11 +203,22 @@ void uh_http_header(struct client *cl, int code, const char *summary);
 void __printf(4, 5)
 uh_client_error(struct client *cl, int code, const char *summary, const char *fmt, ...);
 
-void uh_handle_file_request(struct client *cl);
+void uh_handle_request(struct client *cl);
 
 void uh_auth_add(const char *path, const char *user, const char *pass);
 
 void uh_close_listen_fds(void);
 void uh_close_fds(void);
+
+void uh_interpreter_add(const char *ext, const char *path);
+void uh_dispatch_add(struct dispatch_handler *d);
+
+void uh_relay_open(struct client *cl, struct relay *r, int fd, int pid);
+void uh_relay_close(struct relay *r, int ret);
+void uh_relay_free(struct relay *r);
+
+struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi);
+bool uh_create_process(struct client *cl, struct path_info *pi,
+		       void (*cb)(struct client *cl, struct path_info *pi, int fd));
 
 #endif
