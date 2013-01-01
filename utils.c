@@ -189,3 +189,13 @@ int uh_b64decode(char *buf, int blen, const unsigned char *src, int slen)
 	buf[len++] = 0;
 	return len;
 }
+
+bool uh_path_match(const char *prefix, const char *url)
+{
+	int len = strlen(prefix);
+
+	if (strncmp(url, prefix, len) != 0)
+		return false;
+
+	return url[len] == '/' || url[len] == 0;
+}
