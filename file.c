@@ -28,7 +28,7 @@
 #include <libubox/blobmsg.h>
 
 #include "uhttpd.h"
-#include "uhttpd-mimetypes.h"
+#include "mimetypes.h"
 
 static LIST_HEAD(index_files);
 
