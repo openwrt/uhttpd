@@ -81,10 +81,8 @@ static void relay_process_headers(struct relay *r)
 			break;
 
 		line_len = newline + 1 - buf;
-		if (newline > buf && newline[-1] == '\r') {
+		if (newline > buf && newline[-1] == '\r')
 			newline--;
-			line_len++;
-		}
 
 		*newline = 0;
 		if (newline == buf) {
