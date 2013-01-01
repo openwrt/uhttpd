@@ -42,7 +42,7 @@
 static inline void clearenv(void)
 {
 	extern char **environ;
-	environ = NULL;
+	*environ = NULL;
 }
 #endif
 
