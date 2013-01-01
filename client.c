@@ -27,10 +27,16 @@ static LIST_HEAD(clients);
 int n_clients = 0;
 struct config conf = {};
 
-static const char *http_versions[] = {
+const char * const http_versions[] = {
 	[UH_HTTP_VER_0_9] = "HTTP/0.9",
 	[UH_HTTP_VER_1_0] = "HTTP/1.0",
 	[UH_HTTP_VER_1_1] = "HTTP/1.1",
+};
+
+const char * const http_methods[] = {
+	[UH_HTTP_MSG_GET] = "GET",
+	[UH_HTTP_MSG_POST] = "POST",
+	[UH_HTTP_MSG_HEAD] = "HEAD",
 };
 
 void uh_http_header(struct client *cl, int code, const char *summary)
@@ -113,11 +119,21 @@ static void client_timeout(struct uloop_timeout *timeout)
 	uh_connection_close(cl);
 }
 
+static int find_idx(const char * const *list, int max, const char *str)
+{
+	int i;
+
+	for (i = 0; i < max; i++)
+		if (!strcmp(list[i], str))
+			return i;
+
+	return -1;
+}
+
 static int client_parse_request(struct client *cl, char *data)
 {
 	struct http_request *req = &cl->request;
 	char *type, *path, *version;
-	int i;
 
 	type = strtok(data, " ");
 	path = strtok(NULL, " ");
@@ -126,23 +142,11 @@ static int client_parse_request(struct client *cl, char *data)
 		return CLIENT_STATE_DONE;
 
 	req->url = path;
-	if (!strcmp(type, "GET"))
-		req->method = UH_HTTP_MSG_GET;
-	else if (!strcmp(type, "POST"))
-		req->method = UH_HTTP_MSG_POST;
-	else if (!strcmp(type, "HEAD"))
-		req->method = UH_HTTP_MSG_HEAD;
-	else
+	req->method = find_idx(http_methods, ARRAY_SIZE(http_methods), type);
+	if (req->method < 0)
 		return CLIENT_STATE_DONE;
 
-	cl->request.version = -1;
-	i = array_size(http_versions);
-	while (i--) {
-		if (!strcmp(version, http_versions[i])) {
-			cl->request.version = i;
-			break;
-		}
-	}
+	req->version = find_idx(http_versions, ARRAY_SIZE(http_versions), version);
 	if (cl->request.version < 0)
 		return CLIENT_STATE_DONE;
 

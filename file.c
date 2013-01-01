@@ -30,21 +30,12 @@
 #include "uhttpd.h"
 #include "mimetypes.h"
 
+static char _tag[128];
 static LIST_HEAD(index_files);
 
 struct index_file {
 	struct list_head list;
 	const char *name;
-};
-
-struct path_info {
-	char *root;
-	char *phys;
-	char *name;
-	char *info;
-	char *query;
-	int redirected;
-	struct stat stat;
 };
 
 enum file_hdr {
@@ -67,21 +58,14 @@ void uh_index_add(const char *filename)
 
 static char * canonpath(const char *path, char *path_resolved)
 {
-	char path_copy[PATH_MAX];
-	char *path_cpy = path_copy;
+	const char *path_cpy = path;
 	char *path_res = path_resolved;
 
-	/* relative -> absolute */
-	if (*path != '/') {
-		getcwd(path_copy, PATH_MAX);
-		strncat(path_copy, "/", PATH_MAX - strlen(path_copy));
-		strncat(path_copy, path, PATH_MAX - strlen(path_copy));
-	} else {
-		strncpy(path_copy, path, PATH_MAX);
-	}
+	if (conf.no_symlinks)
+		return realpath(path, path_resolved);
 
 	/* normalize */
-	while ((*path_cpy != '\0') && (path_cpy < (path_copy + PATH_MAX - 2))) {
+	while ((*path_cpy != '\0') && (path_cpy < (path + PATH_MAX - 2))) {
 		if (*path_cpy != '/')
 			goto next;
 
@@ -134,13 +118,13 @@ uh_path_lookup(struct client *cl, const char *url)
 	static char path_info[PATH_MAX];
 	static struct path_info p;
 
-	char buffer[UH_LIMIT_MSGHEAD];
-	char *docroot = conf.docroot;
+	const char *docroot = conf.docroot;
+	int docroot_len = strlen(docroot);
 	char *pathptr = NULL;
+	bool slash;
 
-	int slash = 0;
-	int no_sym = conf.no_symlinks;
 	int i = 0;
+	int len;
 	struct stat s;
 	struct index_file *idx;
 
@@ -148,14 +132,11 @@ uh_path_lookup(struct client *cl, const char *url)
 	if (url == NULL)
 		return NULL;
 
-	memset(path_phys, 0, sizeof(path_phys));
-	memset(path_info, 0, sizeof(path_info));
-	memset(buffer, 0, sizeof(buffer));
 	memset(&p, 0, sizeof(p));
+	path_phys[0] = 0;
+	path_info[0] = 0;
 
-	/* copy docroot */
-	memcpy(buffer, docroot,
-		   min(strlen(docroot), sizeof(buffer) - 1));
+	strcpy(uh_buf, docroot);
 
 	/* separate query string from url */
 	if ((pathptr = strchr(url, '?')) != NULL) {
@@ -163,93 +144,103 @@ uh_path_lookup(struct client *cl, const char *url)
 
 		/* urldecode component w/o query */
 		if (pathptr > url) {
-			if (uh_urldecode(&buffer[strlen(docroot)],
-							 sizeof(buffer) - strlen(docroot) - 1,
-							 url, pathptr - url ) < 0)
-				return NULL; /* bad URL */
+			if (uh_urldecode(&uh_buf[docroot_len],
+					 sizeof(uh_buf) - docroot_len - 1,
+					 url, pathptr - url ) < 0)
+				return NULL;
 		}
 	}
 
 	/* no query string, decode all of url */
-	else if (uh_urldecode(&buffer[strlen(docroot)],
-			      sizeof(buffer) - strlen(docroot) - 1,
+	else if (uh_urldecode(&uh_buf[docroot_len],
+			      sizeof(uh_buf) - docroot_len - 1,
 			      url, strlen(url) ) < 0)
-		return NULL; /* bad URL */
+		return NULL;
 
 	/* create canon path */
-	for (i = strlen(buffer), slash = (buffer[max(0, i-1)] == '/'); i >= 0; i--) {
-		if ((buffer[i] == 0) || (buffer[i] == '/')) {
-			memset(path_info, 0, sizeof(path_info));
-			memcpy(path_info, buffer, min(i + 1, sizeof(path_info) - 1));
+	len = strlen(uh_buf);
+	slash = len && uh_buf[len - 1] == '/';
+	len = min(len, sizeof(path_phys) - 1);
 
-			if (no_sym ? realpath(path_info, path_phys)
-			           : canonpath(path_info, path_phys)) {
-				memset(path_info, 0, sizeof(path_info));
-				memcpy(path_info, &buffer[i],
-					   min(strlen(buffer) - i, sizeof(path_info) - 1));
+	for (i = len; i >= 0; i--) {
+		char ch = uh_buf[i];
+		bool exists;
 
-				break;
-			}
-		}
+		if (ch != 0 && ch != '/')
+			continue;
+
+		uh_buf[i] = 0;
+		exists = !!canonpath(uh_buf, path_phys);
+		uh_buf[i] = ch;
+
+		snprintf(path_info, sizeof(path_info), "%s", uh_buf + i);
+		break;
 	}
 
 	/* check whether found path is within docroot */
-	if (strncmp(path_phys, docroot, strlen(docroot)) ||
-		((path_phys[strlen(docroot)] != 0) &&
-		 (path_phys[strlen(docroot)] != '/')))
+	if (strncmp(path_phys, docroot, docroot_len) != 0 ||
+	    (path_phys[docroot_len] != 0 &&
+	     path_phys[docroot_len] != '/'))
 		return NULL;
 
 	/* test current path */
-	if (!stat(path_phys, &p.stat)) {
-		/* is a regular file */
-		if (p.stat.st_mode & S_IFREG) {
-			p.root = docroot;
-			p.phys = path_phys;
-			p.name = &path_phys[strlen(docroot)];
-			p.info = path_info[0] ? path_info : NULL;
-		}
+	if (stat(path_phys, &p.stat))
+		return NULL;
 
-		/* is a directory */
-		else if ((p.stat.st_mode & S_IFDIR) && !strlen(path_info)) {
-			/* ensure trailing slash */
-			if (path_phys[strlen(path_phys)-1] != '/')
-				path_phys[strlen(path_phys)] = '/';
-
-			/* try to locate index file */
-			memset(buffer, 0, sizeof(buffer));
-			memcpy(buffer, path_phys, sizeof(buffer));
-			pathptr = &buffer[strlen(buffer)];
-
-			/* if requested url resolves to a directory and a trailing slash
-			   is missing in the request url, redirect the client to the same
-			   url with trailing slash appended */
-			if (!slash) {
-				uh_http_header(cl, 302, "Found");
-				ustream_printf(cl->us, "Location: %s%s%s\r\n\r\n",
-						&path_phys[strlen(docroot)],
-						p.query ? "?" : "",
-						p.query ? p.query : "");
-				uh_request_done(cl);
-				p.redirected = 1;
-			} else {
-				list_for_each_entry(idx, &index_files, list) {
-					strncat(buffer, idx->name, sizeof(buffer));
-
-					if (!stat(buffer, &s) && (s.st_mode & S_IFREG)) {
-						memcpy(path_phys, buffer, sizeof(path_phys));
-						memcpy(&p.stat, &s, sizeof(p.stat));
-						break;
-					}
-
-					*pathptr = 0;
-				}
-			}
-
-			p.root = docroot;
-			p.phys = path_phys;
-			p.name = &path_phys[strlen(docroot)];
-		}
+	/* is a regular file */
+	if (p.stat.st_mode & S_IFREG) {
+		p.root = docroot;
+		p.phys = path_phys;
+		p.name = &path_phys[docroot_len];
+		p.info = path_info[0] ? path_info : NULL;
+		return &p;
 	}
+
+	if (!(p.stat.st_mode & S_IFDIR))
+		return NULL;
+
+	if (path_info[0])
+	    return NULL;
+
+	pathptr = path_phys + strlen(path_phys);
+
+	/* ensure trailing slash */
+	if (pathptr[-1] != '/') {
+		pathptr[0] = '/';
+		pathptr[1] = 0;
+		pathptr++;
+	}
+
+	/* if requested url resolves to a directory and a trailing slash
+	   is missing in the request url, redirect the client to the same
+	   url with trailing slash appended */
+	if (!slash) {
+		uh_http_header(cl, 302, "Found");
+		ustream_printf(cl->us, "Location: %s%s%s\r\n\r\n",
+				&path_phys[docroot_len],
+				p.query ? "?" : "",
+				p.query ? p.query : "");
+		uh_request_done(cl);
+		p.redirected = 1;
+		return &p;
+	}
+
+	/* try to locate index file */
+	len = path_phys + sizeof(path_phys) - pathptr - 1;
+	list_for_each_entry(idx, &index_files, list) {
+		if (strlen(idx->name) > len)
+			continue;
+
+		strcpy(pathptr, idx->name);
+		if (!stat(path_phys, &s) && (s.st_mode & S_IFREG))
+			break;
+
+		*pathptr = 0;
+	}
+
+	p.root = docroot;
+	p.phys = path_phys;
+	p.name = &path_phys[docroot_len];
 
 	return p.phys ? &p : NULL;
 }
@@ -281,14 +272,12 @@ static const char * uh_file_mime_lookup(const char *path)
 
 static const char * uh_file_mktag(struct stat *s)
 {
-	static char tag[128];
-
-	snprintf(tag, sizeof(tag), "\"%x-%x-%x\"",
+	snprintf(_tag, sizeof(_tag), "\"%x-%x-%x\"",
 			 (unsigned int) s->st_ino,
 			 (unsigned int) s->st_size,
 			 (unsigned int) s->st_mtime);
 
-	return tag;
+	return _tag;
 }
 
 static time_t uh_file_date2unix(const char *date)
@@ -305,12 +294,11 @@ static time_t uh_file_date2unix(const char *date)
 
 static char * uh_file_unix2date(time_t ts)
 {
-	static char str[128];
 	struct tm *t = gmtime(&ts);
 
-	strftime(str, sizeof(str), "%a, %d %b %Y %H:%M:%S GMT", t);
+	strftime(_tag, sizeof(_tag), "%a, %d %b %Y %H:%M:%S GMT", t);
 
-	return str;
+	return _tag;
 }
 
 static char *uh_file_header(struct client *cl, int idx)
@@ -528,12 +516,11 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 
 static void file_write_cb(struct client *cl)
 {
-	char buf[512];
 	int fd = cl->dispatch.file.fd;
 	int r;
 
 	while (cl->us->w.data_bytes < 256) {
-		r = read(fd, buf, sizeof(buf));
+		r = read(fd, uh_buf, sizeof(uh_buf));
 		if (r < 0) {
 			if (errno == EINTR)
 				continue;
@@ -544,7 +531,7 @@ static void file_write_cb(struct client *cl)
 			return;
 		}
 
-		uh_chunk_write(cl, buf, r);
+		uh_chunk_write(cl, uh_buf, r);
 	}
 }
 

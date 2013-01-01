@@ -34,14 +34,14 @@
 
 #define UH_LIMIT_CLIENTS	64
 #define UH_LIMIT_HEADERS	64
-#define UH_LIMIT_MSGHEAD	4096
 
 struct config {
-	char docroot[PATH_MAX];
-	char *realm;
-	char *file;
-	char *error_handler;
-	char *cgi_prefix;
+	const char *docroot;
+	const char *realm;
+	const char *file;
+	const char *error_handler;
+	const char *cgi_prefix;
+	const char *cgi_path;
 	int no_symlinks;
 	int no_dirlists;
 	int network_timeout;
@@ -50,6 +50,16 @@ struct config {
 	int max_requests;
 	int http_keepalive;
 	int script_timeout;
+};
+
+struct path_info {
+	const char *root;
+	const char *phys;
+	const char *name;
+	const char *info;
+	const char *query;
+	int redirected;
+	struct stat stat;
 };
 
 struct auth_realm {
@@ -76,7 +86,7 @@ struct http_request {
 	enum http_version version;
 	int redirect_status;
 	char *url;
-	struct auth_realm *realm;
+	const struct auth_realm *realm;
 };
 
 struct http_response {
@@ -126,8 +136,11 @@ struct client {
 	} dispatch;
 };
 
+extern char uh_buf[4096];
 extern int n_clients;
 extern struct config conf;
+extern const char * const http_versions[];
+extern const char * const http_methods[];
 
 void uh_index_add(const char *filename);
 

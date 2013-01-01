@@ -30,6 +30,7 @@
 
 #include "uhttpd.h"
 
+char uh_buf[4096];
 
 static int run_server(void)
 {
@@ -165,6 +166,7 @@ static void init_defaults(void)
 	conf.max_requests = 3;
 	conf.realm = "Protected Area";
 	conf.cgi_prefix = "/cgi-bin";
+	conf.cgi_path = "/sbin:/usr/sbin:/bin:/usr/bin";
 
 	uh_index_add("index.html");
 	uh_index_add("index.htm");
@@ -179,6 +181,8 @@ int main(int argc, char **argv)
 	int opt, ch;
 	int cur_fd;
 	int bound = 0;
+
+	BUILD_BUG_ON(sizeof(uh_buf) < PATH_MAX);
 
 	init_defaults();
 	signal(SIGPIPE, SIG_IGN);
@@ -195,11 +199,12 @@ int main(int argc, char **argv)
 			break;
 
 		case 'h':
-			if (!realpath(optarg, conf.docroot)) {
+			if (!realpath(optarg, uh_buf)) {
 				fprintf(stderr, "Error: Invalid directory %s: %s\n",
 						optarg, strerror(errno));
 				exit(1);
 			}
+			conf.docroot = strdup(uh_buf);
 			break;
 
 		case 'E':
