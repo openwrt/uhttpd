@@ -468,7 +468,7 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 			if (!stat(filename, &s) &&
 				(s.st_mode & S_IFDIR) && (s.st_mode & S_IXOTH))
 				uh_chunk_printf(cl,
-					"<li><strong><a href='%s%s'>%s</a>/"
+					"<li><strong><a href='%s%s/'>%s</a>/"
 					"</strong><br /><small>modified: %s"
 					"<br />directory - %.02f kbyte<br />"
 					"<br /></small></li>",
