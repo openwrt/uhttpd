@@ -89,6 +89,7 @@ static void relay_process_headers(struct relay *r)
 			r->header_cb = NULL;
 			if (r->header_end)
 				r->header_end(r);
+			ustream_consume(s, line_len);
 			break;
 		}
 
