@@ -134,6 +134,7 @@ static int client_parse_request(struct client *cl, char *data)
 {
 	struct http_request *req = &cl->request;
 	char *type, *path, *version;
+	int h_method, h_version;
 
 	type = strtok(data, " ");
 	path = strtok(NULL, " ");
@@ -143,13 +144,16 @@ static int client_parse_request(struct client *cl, char *data)
 
 	memset(&cl->request, 0, sizeof(cl->request));
 	req->url = path;
-	req->method = find_idx(http_methods, ARRAY_SIZE(http_methods), type);
-	if (req->method < 0)
-		return CLIENT_STATE_DONE;
 
-	req->version = find_idx(http_versions, ARRAY_SIZE(http_versions), version);
-	if (cl->request.version < 0)
+	h_method = find_idx(http_methods, ARRAY_SIZE(http_methods), type);
+	h_version = find_idx(http_versions, ARRAY_SIZE(http_versions), version);
+	if (h_method < 0 || h_version < 0) {
+		req->version = UH_HTTP_VER_1_0;
 		return CLIENT_STATE_DONE;
+	}
+
+	req->method = h_method;
+	req->version = h_version;
 
 	return CLIENT_STATE_HEADER;
 }
