@@ -178,6 +178,7 @@ static void proc_handle_header(struct relay *r, const char *name, const char *va
 		buf[3] = 0;
 		snprintf(status_buf, sizeof(status_buf), "%s", sep + 1);
 		cl->dispatch.proc.status_msg = status_buf;
+		cl->dispatch.proc.status_code = atoi(buf);
 		return;
 	}
 
