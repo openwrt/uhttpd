@@ -217,3 +217,18 @@ char *uh_split_header(char *str)
 
 	return val;
 }
+
+bool uh_addr_rfc1918(struct uh_addr *addr)
+{
+	uint32_t a;
+
+	if (addr->family != AF_INET)
+		return false;
+
+	a = htonl(addr->in.s_addr);
+	return ((a >= 0x0A000000) && (a <= 0x0AFFFFFF)) ||
+	       ((a >= 0xAC100000) && (a <= 0xAC1FFFFF)) ||
+	       ((a >= 0xC0A80000) && (a <= 0xC0A8FFFF));
+
+	return 0;
+}

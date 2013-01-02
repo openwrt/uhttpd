@@ -136,15 +136,6 @@ struct dispatch_handler {
 	void (*handle_request)(struct client *cl, const char *url, struct path_info *pi);
 };
 
-struct uh_addr {
-	uint8_t family;
-	uint16_t port;
-	union {
-		struct in_addr in;
-		struct in6_addr in6;
-	};
-};
-
 struct client {
 	struct list_head list;
 	int id;

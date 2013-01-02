@@ -29,6 +29,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+struct uh_addr {
+	uint8_t family;
+	uint16_t port;
+	union {
+		struct in_addr in;
+		struct in6_addr in6;
+	};
+};
+
 #define min(x, y) (((x) < (y)) ? (x) : (y))
 #define max(x, y) (((x) > (y)) ? (x) : (y))
 
@@ -57,5 +66,6 @@ int uh_urlencode(char *buf, int blen, const char *src, int slen);
 int uh_b64decode(char *buf, int blen, const void *src, int slen);
 bool uh_path_match(const char *prefix, const char *url);
 char *uh_split_header(char *str);
+bool uh_addr_rfc1918(struct uh_addr *addr);
 
 #endif
