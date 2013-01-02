@@ -40,6 +40,7 @@ struct index_file {
 };
 
 enum file_hdr {
+	HDR_AUTHORIZATION,
 	HDR_IF_MODIFIED_SINCE,
 	HDR_IF_UNMODIFIED_SINCE,
 	HDR_IF_MATCH,
@@ -578,21 +579,10 @@ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
 	file_write_cb(cl);
 }
 
-static void uh_file_request(struct client *cl, const char *url, struct path_info *pi)
+static void uh_file_request(struct client *cl, const char *url,
+			    struct path_info *pi, struct blob_attr **tb)
 {
-	static const struct blobmsg_policy hdr_policy[__HDR_MAX] = {
-		[HDR_IF_MODIFIED_SINCE] = { "if-modified-since", BLOBMSG_TYPE_STRING },
-		[HDR_IF_UNMODIFIED_SINCE] = { "if-unmodified-since", BLOBMSG_TYPE_STRING },
-		[HDR_IF_MATCH] = { "if-match", BLOBMSG_TYPE_STRING },
-		[HDR_IF_NONE_MATCH] = { "if-none-match", BLOBMSG_TYPE_STRING },
-		[HDR_IF_RANGE] = { "if-range", BLOBMSG_TYPE_STRING },
-	};
-	struct blob_attr *tb[__HDR_MAX];
 	int fd;
-
-	blobmsg_parse(hdr_policy, __HDR_MAX, tb, blob_data(cl->hdr.head), blob_len(cl->hdr.head));
-
-	cl->dispatch.file.hdr = tb;
 
 	if (!(pi->stat.st_mode & S_IROTH))
 		goto error;
@@ -602,24 +592,24 @@ static void uh_file_request(struct client *cl, const char *url, struct path_info
 		if (fd < 0)
 			goto error;
 
+		cl->dispatch.file.hdr = tb;
 		uh_file_data(cl, pi, fd);
-	} else if ((pi->stat.st_mode & S_IFDIR)) {
+		cl->dispatch.file.hdr = NULL;
+		return;
+	}
+
+	if ((pi->stat.st_mode & S_IFDIR)) {
 		if (conf.no_dirlists)
 			goto error;
 
 		uh_file_dirlist(cl, pi);
-	} else {
-		goto error;
+		return;
 	}
-
-	cl->dispatch.file.hdr = NULL;
-	return;
 
 error:
 	uh_client_error(cl, 403, "Forbidden",
 			"You don't have permission to access %s on this server.",
 			url);
-	cl->dispatch.file.hdr = NULL;
 }
 
 void uh_dispatch_add(struct dispatch_handler *d)
@@ -653,7 +643,16 @@ dispatch_find(const char *url, struct path_info *pi)
 
 static bool __handle_file_request(struct client *cl, const char *url)
 {
+	static const struct blobmsg_policy hdr_policy[__HDR_MAX] = {
+		[HDR_AUTHORIZATION] = { "authorization", BLOBMSG_TYPE_STRING },
+		[HDR_IF_MODIFIED_SINCE] = { "if-modified-since", BLOBMSG_TYPE_STRING },
+		[HDR_IF_UNMODIFIED_SINCE] = { "if-unmodified-since", BLOBMSG_TYPE_STRING },
+		[HDR_IF_MATCH] = { "if-match", BLOBMSG_TYPE_STRING },
+		[HDR_IF_NONE_MATCH] = { "if-none-match", BLOBMSG_TYPE_STRING },
+		[HDR_IF_RANGE] = { "if-range", BLOBMSG_TYPE_STRING },
+	};
 	struct dispatch_handler *d;
+	struct blob_attr *tb[__HDR_MAX];
 	struct path_info *pi;
 
 	pi = uh_path_lookup(cl, url);
@@ -663,11 +662,18 @@ static bool __handle_file_request(struct client *cl, const char *url)
 	if (pi->redirected)
 		return true;
 
+	blobmsg_parse(hdr_policy, __HDR_MAX, tb, blob_data(cl->hdr.head), blob_len(cl->hdr.head));
+	if (tb[HDR_AUTHORIZATION])
+		pi->auth = blobmsg_data(tb[HDR_AUTHORIZATION]);
+
+	if (!uh_auth_check(cl, pi))
+		return true;
+
 	d = dispatch_find(url, pi);
 	if (d)
 		d->handle_request(cl, url, pi);
 	else
-		uh_file_request(cl, url, pi);
+		uh_file_request(cl, url, pi, tb);
 
 	return true;
 }

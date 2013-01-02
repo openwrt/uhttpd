@@ -103,6 +103,7 @@ struct path_info {
 	const char *name;
 	const char *info;
 	const char *query;
+	const char *auth;
 	bool redirected;
 	struct stat stat;
 	const struct interpreter *ip;
@@ -213,6 +214,7 @@ uh_client_error(struct client *cl, int code, const char *summary, const char *fm
 void uh_handle_request(struct client *cl);
 
 void uh_auth_add(const char *path, const char *user, const char *pass);
+bool uh_auth_check(struct client *cl, struct path_info *pi);
 
 void uh_close_listen_fds(void);
 void uh_close_fds(void);

@@ -66,3 +66,62 @@ void uh_auth_add(const char *path, const char *user, const char *pass)
 	new->pass = strcpy(dest_pass, new_pass);
 	list_add(&new->list, &auth_realms);
 }
+
+bool uh_auth_check(struct client *cl, struct path_info *pi)
+{
+	struct http_request *req = &cl->request;
+	struct auth_realm *realm;
+	bool user_match = false;
+	char *user = NULL;
+	char *pass = NULL;
+	int plen;
+
+	if (pi->auth && !strncasecmp(pi->auth, "Basic ", 6)) {
+		const char *auth = pi->auth + 6;
+
+		uh_b64decode(uh_buf, sizeof(uh_buf), auth, strlen(auth));
+		pass = strchr(uh_buf, ':');
+		if (pass) {
+			user = uh_buf;
+			*pass++ = 0;
+		}
+	}
+
+	req->realm = NULL;
+	plen = strlen(pi->name);
+	list_for_each_entry(realm, &auth_realms, list) {
+		int rlen = strlen(realm->path);
+
+		if (plen < rlen)
+			continue;
+
+		if (strncasecmp(pi->name, realm->path, rlen) != 0)
+			continue;
+
+		req->realm = realm;
+		if (!user)
+			break;
+
+		if (strcmp(user, realm->user) != 0)
+			continue;
+
+		user_match = true;
+		break;
+	}
+
+	if (!req->realm)
+		return true;
+
+	if (user_match && !strcmp(crypt(pass, realm->pass), realm->pass))
+		return true;
+
+	uh_http_header(cl, 401, "Authorization Required");
+	ustream_printf(cl->us,
+				  "WWW-Authenticate: Basic realm=\"%s\"\r\n"
+				  "Content-Type: text/plain\r\n\r\n",
+				  conf.realm);
+	uh_chunk_printf(cl, "Authorization Required\n");
+	uh_request_done(cl);
+
+	return false;
+}
