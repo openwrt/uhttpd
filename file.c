@@ -446,7 +446,7 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 {
 	int i;
 	int count = 0;
-	char filename[PATH_MAX];
+	char *filename = uh_buf;
 	char *pathptr;
 	struct dirent **files = NULL;
 	struct stat s;
