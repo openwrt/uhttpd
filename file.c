@@ -30,7 +30,6 @@
 #include "uhttpd.h"
 #include "mimetypes.h"
 
-static char _tag[128];
 static LIST_HEAD(index_files);
 static LIST_HEAD(dispatch_handlers);
 
@@ -272,14 +271,14 @@ static const char * uh_file_mime_lookup(const char *path)
 	return "application/octet-stream";
 }
 
-static const char * uh_file_mktag(struct stat *s)
+static const char * uh_file_mktag(struct stat *s, char *buf)
 {
-	snprintf(_tag, sizeof(_tag), "\"%x-%x-%x\"",
+	snprintf(buf, sizeof(buf), "\"%x-%x-%x\"",
 			 (unsigned int) s->st_ino,
 			 (unsigned int) s->st_size,
 			 (unsigned int) s->st_mtime);
 
-	return _tag;
+	return buf;
 }
 
 static time_t uh_file_date2unix(const char *date)
@@ -294,13 +293,13 @@ static time_t uh_file_date2unix(const char *date)
 	return 0;
 }
 
-static char * uh_file_unix2date(time_t ts)
+static char * uh_file_unix2date(time_t ts, char *buf)
 {
 	struct tm *t = gmtime(&ts);
 
-	strftime(_tag, sizeof(_tag), "%a, %d %b %Y %H:%M:%S GMT", t);
+	strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", t);
 
-	return _tag;
+	return buf;
 }
 
 static char *uh_file_header(struct client *cl, int idx)
@@ -313,12 +312,14 @@ static char *uh_file_header(struct client *cl, int idx)
 
 static void uh_file_response_ok_hdrs(struct client *cl, struct stat *s)
 {
+	char buf[128];
+
 	if (s) {
-		ustream_printf(cl->us, "ETag: %s\r\n", uh_file_mktag(s));
+		ustream_printf(cl->us, "ETag: %s\r\n", uh_file_mktag(s, buf));
 		ustream_printf(cl->us, "Last-Modified: %s\r\n",
-			       uh_file_unix2date(s->st_mtime));
+			       uh_file_unix2date(s->st_mtime, buf));
 	}
-	ustream_printf(cl->us, "Date: %s\r\n", uh_file_unix2date(time(NULL)));
+	ustream_printf(cl->us, "Date: %s\r\n", uh_file_unix2date(time(NULL), buf));
 }
 
 static void uh_file_response_200(struct client *cl, struct stat *s)
@@ -341,7 +342,8 @@ static void uh_file_response_412(struct client *cl)
 
 static bool uh_file_if_match(struct client *cl, struct stat *s)
 {
-	const char *tag = uh_file_mktag(s);
+	char buf[128];
+	const char *tag = uh_file_mktag(s, buf);
 	char *hdr = uh_file_header(cl, HDR_IF_MATCH);
 	char *p;
 	int i;
@@ -381,7 +383,8 @@ static int uh_file_if_modified_since(struct client *cl, struct stat *s)
 
 static int uh_file_if_none_match(struct client *cl, struct stat *s)
 {
-	const char *tag = uh_file_mktag(s);
+	char buf[128];
+	const char *tag = uh_file_mktag(s, buf);
 	char *hdr = uh_file_header(cl, HDR_IF_NONE_MATCH);
 	char *p;
 	int i;
@@ -446,6 +449,7 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 	char *pathptr;
 	struct dirent **files = NULL;
 	struct stat s;
+	char buf[128];
 
 	uh_file_response_200(cl, NULL);
 	ustream_printf(cl->us, "Content-Type: text/html\r\n\r\n");
@@ -476,7 +480,7 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 					"<br /></small></li>",
 					pi->name, files[i]->d_name,
 					files[i]->d_name,
-					uh_file_unix2date(s.st_mtime),
+					uh_file_unix2date(s.st_mtime, buf),
 					s.st_size / 1024.0);
 
 			*pathptr = 0;
@@ -496,7 +500,7 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 					"<br /></small></li>",
 					pi->name, files[i]->d_name,
 					files[i]->d_name,
-					uh_file_unix2date(s.st_mtime),
+					uh_file_unix2date(s.st_mtime, buf),
 					uh_file_mime_lookup(filename),
 					s.st_size / 1024.0);
 
