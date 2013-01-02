@@ -78,6 +78,7 @@ enum http_version {
 struct http_request {
 	enum http_method method;
 	enum http_version version;
+	bool expect_cont;
 	int redirect_status;
 	const char *url;
 	const struct auth_realm *realm;

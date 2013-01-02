@@ -141,6 +141,7 @@ static int client_parse_request(struct client *cl, char *data)
 	if (!type || !path || !version)
 		return CLIENT_STATE_DONE;
 
+	memset(&cl->request, 0, sizeof(cl->request));
 	req->url = path;
 	req->method = find_idx(http_methods, ARRAY_SIZE(http_methods), type);
 	if (req->method < 0)
@@ -191,6 +192,9 @@ static void client_header_complete(struct client *cl)
 	if (!rfc1918_filter_check(cl))
 		return;
 
+	if (cl->request.expect_cont)
+		ustream_printf(cl->us, "HTTP/1.1 100 Continue\r\n\r\n");
+
 	uh_handle_request(cl);
 }
 
@@ -215,6 +219,10 @@ static void client_parse_header(struct client *cl, char *data)
 	for (name = data; *name; name++)
 		if (isupper(*name))
 			*name = tolower(*name);
+
+	if (!strcasecmp(data, "Expect") &&
+	    !strcasecmp(val, "100-continue"))
+		cl->request.expect_cont = true;
 
 	blobmsg_add_string(&cl->hdr, data, val);
 
