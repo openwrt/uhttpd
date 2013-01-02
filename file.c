@@ -293,11 +293,11 @@ static time_t uh_file_date2unix(const char *date)
 	return 0;
 }
 
-static char * uh_file_unix2date(time_t ts, char *buf)
+static char * uh_file_unix2date(time_t ts, char *buf, int len)
 {
 	struct tm *t = gmtime(&ts);
 
-	strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", t);
+	strftime(buf, len, "%a, %d %b %Y %H:%M:%S GMT", t);
 
 	return buf;
 }
@@ -317,9 +317,10 @@ static void uh_file_response_ok_hdrs(struct client *cl, struct stat *s)
 	if (s) {
 		ustream_printf(cl->us, "ETag: %s\r\n", uh_file_mktag(s, buf));
 		ustream_printf(cl->us, "Last-Modified: %s\r\n",
-			       uh_file_unix2date(s->st_mtime, buf));
+			       uh_file_unix2date(s->st_mtime, buf, sizeof(buf)));
 	}
-	ustream_printf(cl->us, "Date: %s\r\n", uh_file_unix2date(time(NULL), buf));
+	ustream_printf(cl->us, "Date: %s\r\n",
+		       uh_file_unix2date(time(NULL), buf, sizeof(buf)));
 }
 
 static void uh_file_response_200(struct client *cl, struct stat *s)
@@ -482,7 +483,7 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 					"<br /></small></li>",
 					pi->name, files[i]->d_name,
 					files[i]->d_name,
-					uh_file_unix2date(s.st_mtime, buf),
+					uh_file_unix2date(s.st_mtime, buf, sizeof(buf)),
 					s.st_size / 1024.0);
 
 			*pathptr = 0;
@@ -501,7 +502,7 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 					"<br /></small></li>",
 					pi->name, files[i]->d_name,
 					files[i]->d_name,
-					uh_file_unix2date(s.st_mtime, buf),
+					uh_file_unix2date(s.st_mtime, buf, sizeof(buf)),
 					uh_file_mime_lookup(filename),
 					s.st_size / 1024.0);
 
