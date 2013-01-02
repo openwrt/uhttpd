@@ -59,7 +59,7 @@ void uh_http_header(struct client *cl, int code, const char *summary)
 
 static void uh_connection_close(struct client *cl)
 {
-	cl->state = CLIENT_STATE_DONE;
+	cl->state = CLIENT_STATE_CLOSE;
 	cl->us->eof = true;
 	ustream_state_change(cl->us);
 }
@@ -177,20 +177,23 @@ static void client_header_complete(struct client *cl)
 	uh_handle_request(cl);
 }
 
-static int client_parse_header(struct client *cl, char *data)
+static void client_parse_header(struct client *cl, char *data)
 {
 	char *name;
 	char *val;
 
 	if (!*data) {
 		uloop_timeout_cancel(&cl->timeout);
+		cl->state = CLIENT_STATE_DATA;
 		client_header_complete(cl);
-		return CLIENT_STATE_DATA;
+		return;
 	}
 
 	val = uh_split_header(data);
-	if (!val)
-		return CLIENT_STATE_DONE;
+	if (!val) {
+		cl->state = CLIENT_STATE_DONE;
+		return;
+	}
 
 	for (name = data; *name; name++)
 		if (isupper(*name))
@@ -198,7 +201,7 @@ static int client_parse_header(struct client *cl, char *data)
 
 	blobmsg_add_string(&cl->hdr, data, val);
 
-	return CLIENT_STATE_HEADER;
+	cl->state = CLIENT_STATE_HEADER;
 }
 
 static bool client_data_cb(struct client *cl, char *buf, int len)
@@ -216,7 +219,7 @@ static bool client_header_cb(struct client *cl, char *buf, int len)
 		return false;
 
 	*newline = 0;
-	cl->state = client_parse_header(cl, buf);
+	client_parse_header(cl, buf);
 	line_len = newline + 2 - buf;
 	ustream_consume(cl->us, line_len);
 	if (cl->state == CLIENT_STATE_DATA)
@@ -286,9 +289,15 @@ static void client_notify_state(struct ustream *s)
 {
 	struct client *cl = container_of(s, struct client, sfd);
 
-	if (cl->state == CLIENT_STATE_CLOSE ||
-		(s->eof && !s->w.data_bytes) || s->write_error)
-		return client_close(cl);
+	if (!s->write_error) {
+		if (cl->state == CLIENT_STATE_DATA)
+			return;
+
+		if (!s->eof || s->w.data_bytes)
+			return;
+	}
+
+	return client_close(cl);
 }
 
 void uh_accept_client(int fd)
