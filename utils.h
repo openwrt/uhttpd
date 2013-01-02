@@ -53,6 +53,9 @@ static inline void clearenv(void)
 	extern char **environ;
 	*environ = NULL;
 }
+
+time_t timegm (struct tm *tm);
+
 #endif
 
 #ifdef __GNUC__

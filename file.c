@@ -246,10 +246,6 @@ uh_path_lookup(struct client *cl, const char *url)
 	return p.phys ? &p : NULL;
 }
 
-#ifdef __APPLE__
-time_t timegm (struct tm *tm);
-#endif
-
 static const char * uh_file_mime_lookup(const char *path)
 {
 	struct mimetype *m = &uh_mime_types[0];
