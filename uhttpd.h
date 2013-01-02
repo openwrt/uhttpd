@@ -59,9 +59,9 @@ struct config {
 
 struct auth_realm {
 	struct list_head list;
-	char *path;
-	char *user;
-	char *pass;
+	const char *path;
+	const char *user;
+	const char *pass;
 };
 
 enum http_method {
@@ -80,7 +80,7 @@ struct http_request {
 	enum http_method method;
 	enum http_version version;
 	int redirect_status;
-	char *url;
+	const char *url;
 	const struct auth_realm *realm;
 };
 
@@ -94,8 +94,8 @@ enum client_state {
 
 struct interpreter {
 	struct list_head list;
-	char *path;
-	char *ext;
+	const char *path;
+	const char *ext;
 };
 
 struct path_info {
@@ -104,9 +104,9 @@ struct path_info {
 	const char *name;
 	const char *info;
 	const char *query;
-	int redirected;
+	bool redirected;
 	struct stat stat;
-	struct interpreter *ip;
+	const struct interpreter *ip;
 };
 
 struct env_var {

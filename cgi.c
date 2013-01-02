@@ -38,7 +38,7 @@ void uh_interpreter_add(const char *ext, const char *path)
 
 static void cgi_main(struct client *cl, struct path_info *pi, int fd)
 {
-	struct interpreter *ip = pi->ip;
+	const struct interpreter *ip = pi->ip;
 	struct env_var *var;
 
 	dup2(fd, 0);
