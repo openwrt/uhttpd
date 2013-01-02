@@ -172,8 +172,25 @@ static bool client_init_cb(struct client *cl, char *buf, int len)
 	return true;
 }
 
+static bool rfc1918_filter_check(struct client *cl)
+{
+	if (!conf.rfc1918_filter)
+		return true;
+
+	if (!uh_addr_rfc1918(&cl->peer_addr) || uh_addr_rfc1918(&cl->srv_addr))
+		return true;
+
+	uh_client_error(cl, 403, "Forbidden",
+			"Rejected request from RFC1918 IP "
+			"to public server address");
+	return false;
+}
+
 static void client_header_complete(struct client *cl)
 {
+	if (!rfc1918_filter_check(cl))
+		return;
+
 	uh_handle_request(cl);
 }
 
