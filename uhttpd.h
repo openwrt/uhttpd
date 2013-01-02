@@ -136,6 +136,15 @@ struct dispatch_handler {
 	void (*handle_request)(struct client *cl, const char *url, struct path_info *pi);
 };
 
+struct uh_addr {
+	uint8_t family;
+	uint16_t port;
+	union {
+		struct in_addr in;
+		struct in6_addr in6;
+	};
+};
+
 struct client {
 	struct list_head list;
 	int id;
@@ -150,8 +159,7 @@ struct client {
 	enum client_state state;
 
 	struct http_request request;
-	struct sockaddr_in6 servaddr;
-	struct sockaddr_in6 peeraddr;
+	struct uh_addr srv_addr, peer_addr;
 
 	struct blob_buf hdr;
 

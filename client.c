@@ -300,6 +300,21 @@ static void client_notify_state(struct ustream *s)
 	return client_close(cl);
 }
 
+static void set_addr(struct uh_addr *addr, void *src)
+{
+	struct sockaddr_in *sin = src;
+	struct sockaddr_in6 *sin6 = src;
+
+	addr->family = sin->sin_family;
+	if (addr->family == AF_INET) {
+		addr->port = ntohs(sin->sin_port);
+		memcpy(&addr->in, &sin->sin_addr, sizeof(addr->in));
+	} else {
+		addr->port = ntohs(sin6->sin6_port);
+		memcpy(&addr->in6, &sin6->sin6_addr, sizeof(addr->in6));
+	}
+}
+
 void uh_accept_client(int fd)
 {
 	static struct client *next_client;
@@ -307,19 +322,22 @@ void uh_accept_client(int fd)
 	unsigned int sl;
 	int sfd;
 	static int client_id = 0;
+	struct sockaddr_in6 addr;
 
 	if (!next_client)
 		next_client = calloc(1, sizeof(*next_client));
 
 	cl = next_client;
 
-	sl = sizeof(cl->peeraddr);
-	sfd = accept(fd, (struct sockaddr *) &cl->peeraddr, &sl);
+	sl = sizeof(addr);
+	sfd = accept(fd, (struct sockaddr *) &addr, &sl);
 	if (sfd < 0)
 		return;
 
-	sl = sizeof(cl->servaddr);
-	getsockname(fd, (struct sockaddr *) &cl->servaddr, &sl);
+	set_addr(&cl->peer_addr, &addr);
+	sl = sizeof(addr);
+	getsockname(fd, (struct sockaddr *) &addr, &sl);
+	set_addr(&cl->srv_addr, &addr);
 	cl->us = &cl->sfd.stream;
 	cl->us->string_data = true;
 	cl->us->notify_read = client_ustream_read_cb;

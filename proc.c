@@ -17,6 +17,7 @@
  *  limitations under the License.
  */
 
+#include <arpa/inet.h>
 #include <libubox/blobmsg.h>
 #include "uhttpd.h"
 
@@ -81,9 +82,19 @@ enum extra_vars {
 	VAR_PATH_INFO,
 	VAR_USER,
 	VAR_REDIRECT,
+	VAR_SERVER_NAME,
+	VAR_SERVER_ADDR,
+	VAR_SERVER_PORT,
+	VAR_REMOTE_NAME,
+	VAR_REMOTE_ADDR,
+	VAR_REMOTE_PORT,
 
 	__VAR_MAX,
 };
+
+static char local_addr[INET6_ADDRSTRLEN], remote_addr[INET6_ADDRSTRLEN];
+static char local_port[6], remote_port[6];
+static char redirect_status[4];
 
 static struct env_var extra_vars[] = {
 	[_VAR_GW] = { "GATEWAY_INTERFACE", "CGI/1.1" },
@@ -97,7 +108,13 @@ static struct env_var extra_vars[] = {
 	[VAR_METHOD] = { "REQUEST_METHOD" },
 	[VAR_PATH_INFO] = { "PATH_INFO" },
 	[VAR_USER] = { "REMOTE_USER" },
-	[VAR_REDIRECT] = { "REDIRECT_STATUS" },
+	[VAR_REDIRECT] = { "REDIRECT_STATUS", redirect_status },
+	[VAR_SERVER_NAME] = { "SERVER_NAME", local_addr },
+	[VAR_SERVER_ADDR] = { "SERVER_ADDR", local_addr },
+	[VAR_SERVER_PORT] = { "SERVER_PORT", local_port },
+	[VAR_REMOTE_NAME] = { "REMOTE_HOST", remote_addr },
+	[VAR_REMOTE_ADDR] = { "REMOTE_ADDR", remote_addr },
+	[VAR_REMOTE_PORT] = { "REMOTE_PORT", remote_port },
 };
 
 struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi)
@@ -106,7 +123,6 @@ struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi)
 	struct blob_attr *data = cl->hdr.head;
 	struct env_var *vars = (void *) uh_buf;
 	struct blob_attr *tb[__HDR_MAX];
-	static char buf[4];
 	int len;
 	int i;
 
@@ -126,8 +142,10 @@ struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi)
 	extra_vars[VAR_PATH_INFO].value = pi->info;
 	extra_vars[VAR_USER].value = req->realm ? req->realm->user : NULL;
 
-	snprintf(buf, sizeof(buf), "%d", req->redirect_status);
-	extra_vars[VAR_REDIRECT].value = buf;
+	snprintf(redirect_status, sizeof(redirect_status),
+		 "%d", req->redirect_status);
+	inet_ntop(cl->srv_addr.family, &cl->srv_addr.in, local_addr, sizeof(local_addr));
+	inet_ntop(cl->peer_addr.family, &cl->peer_addr.in, remote_addr, sizeof(remote_addr));
 
 	blobmsg_parse(hdr_policy, __HDR_MAX, tb, blob_data(data), blob_len(data));
 	for (i = 0; i < ARRAY_SIZE(proc_header_env); i++) {
