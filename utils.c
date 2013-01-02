@@ -122,7 +122,7 @@ int uh_urlencode(char *buf, int blen, const char *src, int slen)
 {
 	int i;
 	int len = 0;
-	const char hex[] = "0123456789abcdef";
+	static const char hex[] = "0123456789abcdef";
 
 	for (i = 0; (i < slen) && (len < blen); i++)
 	{
