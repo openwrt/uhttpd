@@ -224,9 +224,15 @@ static void client_parse_header(struct client *cl, char *data)
 		if (isupper(*name))
 			*name = tolower(*name);
 
-	if (!strcasecmp(data, "Expect") &&
-	    !strcasecmp(val, "100-continue"))
-		cl->request.expect_cont = true;
+	if (!strcasecmp(data, "Expect")) {
+		if (!strcasecmp(val, "100-continue"))
+			cl->request.expect_cont = true;
+		else {
+			uh_header_error(cl, 400, "Bad Request");
+			return;
+		}
+	}
+
 
 	blobmsg_add_string(&cl->hdr, data, val);
 
