@@ -224,12 +224,13 @@ static void proc_free(struct client *cl)
 bool uh_create_process(struct client *cl, struct path_info *pi,
 		       void (*cb)(struct client *cl, struct path_info *pi, int fd))
 {
+	struct dispatch *d = &cl->dispatch;
 	int fds[2];
 	int pid;
 
 	blob_buf_init(&cl->dispatch.proc.hdr, 0);
-	cl->dispatch.proc.status_code = 200;
-	cl->dispatch.proc.status_msg = "OK";
+	d->proc.status_code = 200;
+	d->proc.status_msg = "OK";
 
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds))
 		return false;
@@ -250,11 +251,11 @@ bool uh_create_process(struct client *cl, struct path_info *pi,
 
 	close(fds[1]);
 	uh_relay_open(cl, &cl->dispatch.proc.r, fds[0], pid);
-	cl->dispatch.free = proc_free;
-	cl->dispatch.close_fds = proc_close_fds;
-	cl->dispatch.proc.r.header_cb = proc_handle_header;
-	cl->dispatch.proc.r.header_end = proc_handle_header_end;
-	cl->dispatch.proc.r.close = proc_handle_close;
+	d->free = proc_free;
+	d->close_fds = proc_close_fds;
+	d->proc.r.header_cb = proc_handle_header;
+	d->proc.r.header_end = proc_handle_header_end;
+	d->proc.r.close = proc_handle_close;
 
 	return true;
 }
