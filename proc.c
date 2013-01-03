@@ -232,6 +232,7 @@ static void proc_write_close(struct client *cl)
 
 static void proc_free(struct client *cl)
 {
+	blob_buf_free(&cl->hdr);
 	proc_write_close(cl);
 	uh_relay_free(&cl->dispatch.proc.r);
 }
