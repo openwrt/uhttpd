@@ -166,10 +166,10 @@ void uh_relay_open(struct client *cl, struct relay *r, int fd, int pid)
 	struct ustream *us = &r->sfd.stream;
 
 	r->cl = cl;
-	ustream_fd_init(&r->sfd, fd);
 	us->notify_read = relay_read_cb;
 	us->notify_state = relay_state_cb;
 	us->string_data = true;
+	ustream_fd_init(&r->sfd, fd);
 
 	r->proc.pid = pid;
 	r->proc.cb = relay_proc_cb;
