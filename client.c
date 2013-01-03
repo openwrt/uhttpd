@@ -277,7 +277,8 @@ void client_poll_post_data(struct client *cl)
 				break;
 
 			if (d->data_send)
-				d->data_send(cl, buf, cur_len);
+				cur_len = d->data_send(cl, buf, cur_len);
+
 			r->content_length -= cur_len;
 			ustream_consume(cl->us, cur_len);
 			continue;

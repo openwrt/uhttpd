@@ -130,6 +130,14 @@ struct relay {
 	void (*close)(struct relay *r, int ret);
 };
 
+struct dispatch_proc {
+	struct blob_buf hdr;
+	struct uloop_fd wrfd;
+	struct relay r;
+	int status_code;
+	char *status_msg;
+};
+
 struct dispatch_handler {
 	struct list_head list;
 
@@ -139,7 +147,7 @@ struct dispatch_handler {
 };
 
 struct dispatch {
-	void (*data_send)(struct client *cl, const char *data, int len);
+	int (*data_send)(struct client *cl, const char *data, int len);
 	void (*data_done)(struct client *cl);
 	void (*write_cb)(struct client *cl);
 	void (*close_fds)(struct client *cl);
@@ -151,12 +159,7 @@ struct dispatch {
 			struct blob_attr **hdr;
 			int fd;
 		} file;
-		struct {
-			struct blob_buf hdr;
-			struct relay r;
-			int status_code;
-			char *status_msg;
-		} proc;
+		struct dispatch_proc proc;
 	};
 };
 
@@ -227,6 +230,6 @@ void uh_relay_free(struct relay *r);
 
 struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi);
 bool uh_create_process(struct client *cl, struct path_info *pi,
-		       void (*cb)(struct client *cl, struct path_info *pi, int fd));
+		       void (*cb)(struct client *cl, struct path_info *pi));
 
 #endif

@@ -218,98 +218,130 @@ static void proc_handle_header_end(struct relay *r)
 	ustream_printf(cl->us, "\r\n");
 }
 
+static void proc_write_close(struct client *cl)
+{
+	struct dispatch_proc *p = &cl->dispatch.proc;
+
+	if (p->wrfd.fd < 0)
+		return;
+
+	uloop_fd_delete(&p->wrfd);
+	close(p->wrfd.fd);
+	p->wrfd.fd = -1;
+}
+
 static void proc_free(struct client *cl)
 {
+	proc_write_close(cl);
 	uh_relay_free(&cl->dispatch.proc.r);
 }
 
-static void proc_write_close(struct client *cl)
+static void proc_write_cb(struct uloop_fd *fd, unsigned int events)
 {
-	shutdown(cl->dispatch.proc.r.sfd.fd.fd, SHUT_WR);
-}
+	struct client *cl = container_of(fd, struct client, dispatch.proc.wrfd);
 
-static void proc_relay_write_cb(struct ustream *us, int bytes)
-{
-	struct client *cl = container_of(us, struct client, dispatch.proc.r.sfd.stream);
-
-	if (ustream_pending_data(us, true))
-		return;
-
-	cl->dispatch.data_blocked = false;
-	us->notify_write = NULL;
 	client_poll_post_data(cl);
 }
 
-static void proc_relay_write_close_cb(struct ustream *us, int bytes)
+static int proc_data_send(struct client *cl, const char *data, int len)
 {
-	struct client *cl = container_of(us, struct client, dispatch.proc.r.sfd.stream);
+	struct dispatch_proc *p = &cl->dispatch.proc;
+	int retlen = 0;
+	int ret;
 
-	if (ustream_pending_data(us, true))
-		return;
+	while (len) {
+		ret = write(p->wrfd.fd, data, len);
 
-	proc_write_close(cl);
-}
+		if (ret < 0) {
+			if (errno == EINTR)
+				continue;
 
-static void proc_data_send(struct client *cl, const char *data, int len)
-{
-	struct ustream *us = &cl->dispatch.proc.r.sfd.stream;
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				break;
 
-	ustream_write(us, data, len, false);
-	if (ustream_pending_data(us, true)) {
-		cl->dispatch.data_blocked = true;
-		us->notify_write = proc_relay_write_cb;
+			/* error, no retry */
+			len = 0;
+			break;
+		}
+
+		if (!ret)
+			break;
+
+		retlen += ret;
+		len -= ret;
+		data += ret;
 	}
-}
 
-static void proc_data_done(struct client *cl)
-{
-	struct ustream *us = &cl->dispatch.proc.r.sfd.stream;
+	if (len)
+		uloop_fd_add(&p->wrfd, ULOOP_WRITE);
+	else
+		uloop_fd_delete(&p->wrfd);
 
-	if (ustream_pending_data(us, true)) {
-		us->notify_write = proc_relay_write_close_cb;
-		return;
-	}
-
-	proc_write_close(cl);
+	return retlen;
 }
 
 bool uh_create_process(struct client *cl, struct path_info *pi,
-		       void (*cb)(struct client *cl, struct path_info *pi, int fd))
+		       void (*cb)(struct client *cl, struct path_info *pi))
 {
 	struct dispatch *d = &cl->dispatch;
-	int fds[2];
+	struct dispatch_proc *proc = &d->proc;
+	int rfd[2], wfd[2];
 	int pid;
 
-	blob_buf_init(&cl->dispatch.proc.hdr, 0);
-	d->proc.status_code = 200;
-	d->proc.status_msg = "OK";
+	blob_buf_init(&proc->hdr, 0);
+	proc->status_code = 200;
+	proc->status_msg = "OK";
 
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds))
+	if (pipe(rfd))
 		return false;
+
+	if (pipe(wfd))
+		goto close_rfd;
 
 	pid = fork();
-	if (pid < 0) {
-		close(fds[0]);
-		close(fds[1]);
-		return false;
-	}
+	if (pid < 0)
+		goto close_wfd;
 
 	if (!pid) {
-		close(fds[0]);
+		close(0);
+		close(1);
+
+		dup2(rfd[1], 1);
+		dup2(wfd[0], 0);
+
+		close(rfd[0]);
+		close(rfd[1]);
+		close(wfd[0]);
+		close(wfd[1]);
+
 		uh_close_fds();
-		cb(cl, pi, fds[1]);
+		cb(cl, pi);
 		exit(0);
 	}
 
-	close(fds[1]);
-	uh_relay_open(cl, &cl->dispatch.proc.r, fds[0], pid);
+	close(rfd[1]);
+	close(wfd[0]);
+
+	proc->wrfd.fd = wfd[1];
+	uh_relay_open(cl, &proc->r, rfd[0], pid);
+
 	d->free = proc_free;
 	d->close_fds = proc_close_fds;
 	d->data_send = proc_data_send;
-	d->data_done = proc_data_done;
-	d->proc.r.header_cb = proc_handle_header;
-	d->proc.r.header_end = proc_handle_header_end;
-	d->proc.r.close = proc_handle_close;
+	d->data_done = proc_write_close;
+	proc->r.header_cb = proc_handle_header;
+	proc->r.header_end = proc_handle_header_end;
+	proc->r.close = proc_handle_close;
+	proc->wrfd.cb = proc_write_cb;
 
 	return true;
+
+close_wfd:
+	close(wfd[0]);
+	close(wfd[1]);
+close_rfd:
+	close(rfd[0]);
+	close(rfd[1]);
+
+	return false;
 }

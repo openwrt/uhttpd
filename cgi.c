@@ -36,14 +36,11 @@ void uh_interpreter_add(const char *ext, const char *path)
 	list_add_tail(&in->list, &interpreters);
 }
 
-static void cgi_main(struct client *cl, struct path_info *pi, int fd)
+static void cgi_main(struct client *cl, struct path_info *pi)
 {
 	const struct interpreter *ip = pi->ip;
 	struct env_var *var;
 
-	dup2(fd, 0);
-	dup2(fd, 1);
-	close(fd);
 	clearenv();
 	setenv("PATH", conf.cgi_path, 1);
 
