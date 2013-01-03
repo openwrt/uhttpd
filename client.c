@@ -261,15 +261,16 @@ static bool client_data_cb(struct client *cl, char *buf, int len)
 		return false;
 
 	while (len) {
+		int offset = 0;
 		char *sep;
 
-		r->content_length -= cur_len;
 		consumed += cur_len;
 		buf += cur_len;
 		len -= cur_len;
 		cur_len = min(r->content_length, len);
 
 		if (cur_len) {
+			r->content_length -= cur_len;
 			if (d->data_send)
 				d->data_send(cl, buf, cur_len);
 			continue;
@@ -278,28 +279,44 @@ static bool client_data_cb(struct client *cl, char *buf, int len)
 		if (!r->transfer_chunked)
 			break;
 
-		sep = strstr(buf, "\r\n");
+		if (r->transfer_chunked > 1)
+			offset = 2;
+
+		sep = strstr(buf + offset, "\r\n");
 		if (!sep)
 			break;
 
 		*sep = 0;
 		cur_len = sep + 2 - buf;
 
-		r->content_length = strtoul(buf, &sep, 16);
+		r->content_length = strtoul(buf + offset, &sep, 16);
+		r->transfer_chunked++;
 
 		/* invalid chunk length */
 		if (sep && *sep)
-			return false;
+			goto abort;
 
 		/* empty chunk == eof */
-		if (!r->content_length) {
+		if (!r->content_length)
 			r->transfer_chunked = false;
-			continue;
-		}
+
+		continue;
+
+abort:
+		consumed = len;
+		r->content_length = 0;
+		r->transfer_chunked = 0;
+		break;
 	}
 
 	ustream_consume(cl->us, consumed);
-	return r->content_length || r->transfer_chunked;
+	if (!r->content_length && !r->transfer_chunked) {
+		if (cl->dispatch.data_done)
+			cl->dispatch.data_done(cl);
+
+		cl->state = CLIENT_STATE_DONE;
+	}
+	return false;
 }
 
 static bool client_header_cb(struct client *cl, char *buf, int len)
@@ -345,8 +362,6 @@ static void client_read_cb(struct client *cl)
 		if (!read_cbs[cl->state](cl, str, len)) {
 			if (len == us->r.buffer_len)
 				uh_header_error(cl, 413, "Request Entity Too Large");
-			if (cl->dispatch.data_done)
-				cl->dispatch.data_done(cl);
 			break;
 		}
 	} while(1);
