@@ -137,6 +137,24 @@ struct dispatch_handler {
 	void (*handle_request)(struct client *cl, const char *url, struct path_info *pi);
 };
 
+struct dispatch {
+	void (*write_cb)(struct client *cl);
+	void (*close_fds)(struct client *cl);
+	void (*free)(struct client *cl);
+	union {
+		struct {
+			struct blob_attr **hdr;
+			int fd;
+		} file;
+		struct {
+			struct blob_buf hdr;
+			struct relay r;
+			int status_code;
+			char *status_msg;
+		} proc;
+	};
+};
+
 struct client {
 	struct list_head list;
 	int id;
@@ -154,24 +172,7 @@ struct client {
 	struct uh_addr srv_addr, peer_addr;
 
 	struct blob_buf hdr;
-
-	struct {
-		void (*write_cb)(struct client *cl);
-		void (*close_fds)(struct client *cl);
-		void (*free)(struct client *cl);
-		union {
-			struct {
-				struct blob_attr **hdr;
-				int fd;
-			} file;
-			struct {
-				struct blob_buf hdr;
-				struct relay r;
-				int status_code;
-				char *status_msg;
-			} proc;
-		};
-	} dispatch;
+	struct dispatch dispatch;
 };
 
 extern char uh_buf[4096];
