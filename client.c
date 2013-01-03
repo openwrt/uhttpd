@@ -204,6 +204,8 @@ static void client_header_complete(struct client *cl)
 
 static void client_parse_header(struct client *cl, char *data)
 {
+	struct http_request *r = &cl->request;
+	char *err;
 	char *name;
 	char *val;
 
@@ -224,13 +226,22 @@ static void client_parse_header(struct client *cl, char *data)
 		if (isupper(*name))
 			*name = tolower(*name);
 
-	if (!strcasecmp(data, "Expect")) {
+	if (!strcmp(data, "expect")) {
 		if (!strcasecmp(val, "100-continue"))
-			cl->request.expect_cont = true;
+			r->expect_cont = true;
 		else {
 			uh_header_error(cl, 412, "Precondition Failed");
 			return;
 		}
+	} else if (!strcmp(data, "content-length")) {
+		r->content_length = strtoul(val, &err, 0);
+		if (err && *err) {
+			uh_header_error(cl, 400, "Bad Request");
+			return;
+		}
+	} else if (!strcmp(data, "transfer-encoding")) {
+		if (!strcmp(val, "chunked"))
+			r->transfer_chunked = true;
 	}
 
 
@@ -241,7 +252,54 @@ static void client_parse_header(struct client *cl, char *data)
 
 static bool client_data_cb(struct client *cl, char *buf, int len)
 {
-	return false;
+	struct dispatch *d = &cl->dispatch;
+	struct http_request *r = &cl->request;
+	int consumed = 0;
+	int cur_len = 0;
+
+	if (!d->data_send)
+		return false;
+
+	while (len) {
+		char *sep;
+
+		r->content_length -= cur_len;
+		consumed += cur_len;
+		buf += cur_len;
+		len -= cur_len;
+		cur_len = min(r->content_length, len);
+
+		if (cur_len) {
+			if (d->data_send)
+				d->data_send(cl, buf, cur_len);
+			continue;
+		}
+
+		if (!r->transfer_chunked)
+			break;
+
+		sep = strstr(buf, "\r\n");
+		if (!sep)
+			break;
+
+		*sep = 0;
+		cur_len = sep + 2 - buf;
+
+		r->content_length = strtoul(buf, &sep, 16);
+
+		/* invalid chunk length */
+		if (sep && *sep)
+			return false;
+
+		/* empty chunk == eof */
+		if (!r->content_length) {
+			r->transfer_chunked = false;
+			continue;
+		}
+	}
+
+	ustream_consume(cl->us, consumed);
+	return r->content_length || r->transfer_chunked;
 }
 
 static bool client_header_cb(struct client *cl, char *buf, int len)
@@ -258,7 +316,7 @@ static bool client_header_cb(struct client *cl, char *buf, int len)
 	line_len = newline + 2 - buf;
 	ustream_consume(cl->us, line_len);
 	if (cl->state == CLIENT_STATE_DATA)
-		client_data_cb(cl, newline + 2, len - line_len);
+		return client_data_cb(cl, newline + 2, len - line_len);
 
 	return true;
 }
@@ -278,7 +336,7 @@ static void client_read_cb(struct client *cl)
 
 	do {
 		str = ustream_get_read_buf(us, &len);
-		if (!str)
+		if (!str || !len)
 			break;
 
 		if (cl->state >= array_size(read_cbs) || !read_cbs[cl->state])
@@ -287,6 +345,8 @@ static void client_read_cb(struct client *cl)
 		if (!read_cbs[cl->state](cl, str, len)) {
 			if (len == us->r.buffer_len)
 				uh_header_error(cl, 413, "Request Entity Too Large");
+			if (cl->dispatch.data_done)
+				cl->dispatch.data_done(cl);
 			break;
 		}
 	} while(1);

@@ -78,8 +78,10 @@ enum http_version {
 struct http_request {
 	enum http_method method;
 	enum http_version version;
-	bool expect_cont;
 	int redirect_status;
+	int content_length;
+	bool expect_cont;
+	bool transfer_chunked;
 	const char *url;
 	const struct auth_realm *realm;
 };
@@ -138,6 +140,8 @@ struct dispatch_handler {
 };
 
 struct dispatch {
+	void (*data_send)(struct client *cl, const char *data, int len);
+	void (*data_done)(struct client *cl);
 	void (*write_cb)(struct client *cl);
 	void (*close_fds)(struct client *cl);
 	void (*free)(struct client *cl);

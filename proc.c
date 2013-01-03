@@ -221,6 +221,40 @@ static void proc_free(struct client *cl)
 	uh_relay_free(&cl->dispatch.proc.r);
 }
 
+static void proc_write_close(struct client *cl)
+{
+	shutdown(cl->dispatch.proc.r.sfd.fd.fd, SHUT_WR);
+}
+
+static void proc_relay_write_cb(struct ustream *us, int bytes)
+{
+	struct client *cl = container_of(us, struct client, dispatch.proc.r.sfd.stream);
+
+	if (ustream_pending_data(us, true))
+		return;
+
+	proc_write_close(cl);
+}
+
+static void proc_data_send(struct client *cl, const char *data, int len)
+{
+	struct ustream *us = &cl->dispatch.proc.r.sfd.stream;
+
+	ustream_write(us, data, len, false);
+}
+
+static void proc_data_done(struct client *cl)
+{
+	struct ustream *us = &cl->dispatch.proc.r.sfd.stream;
+
+	if (ustream_pending_data(us, true)) {
+		us->notify_write = proc_relay_write_cb;
+		return;
+	}
+
+	proc_write_close(cl);
+}
+
 bool uh_create_process(struct client *cl, struct path_info *pi,
 		       void (*cb)(struct client *cl, struct path_info *pi, int fd))
 {
@@ -253,6 +287,8 @@ bool uh_create_process(struct client *cl, struct path_info *pi,
 	uh_relay_open(cl, &cl->dispatch.proc.r, fds[0], pid);
 	d->free = proc_free;
 	d->close_fds = proc_close_fds;
+	d->data_send = proc_data_send;
+	d->data_done = proc_data_done;
 	d->proc.r.header_cb = proc_handle_header;
 	d->proc.r.header_end = proc_handle_header_end;
 	d->proc.r.close = proc_handle_close;
