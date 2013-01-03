@@ -249,29 +249,37 @@ static void client_parse_header(struct client *cl, char *data)
 	cl->state = CLIENT_STATE_HEADER;
 }
 
-static bool client_data_cb(struct client *cl, char *buf, int len)
+void client_poll_post_data(struct client *cl)
 {
 	struct dispatch *d = &cl->dispatch;
 	struct http_request *r = &cl->request;
-	int consumed = 0;
-	int cur_len = 0;
+	char *buf;
+	int len;
 
-	if (!d->data_send)
-		return false;
+	if (cl->state == CLIENT_STATE_DONE)
+		return;
 
-	while (len) {
-		int offset = 0;
+	while (1) {
 		char *sep;
+		int offset = 0;
+		int cur_len;
 
-		consumed += cur_len;
-		buf += cur_len;
-		len -= cur_len;
+		buf = ustream_get_read_buf(cl->us, &len);
+		if (!buf || !len)
+			break;
+
+		if (!d->data_send)
+			return;
+
 		cur_len = min(r->content_length, len);
-
 		if (cur_len) {
-			r->content_length -= cur_len;
+			if (d->data_blocked)
+				break;
+
 			if (d->data_send)
 				d->data_send(cl, buf, cur_len);
+			r->content_length -= cur_len;
+			ustream_consume(cl->us, cur_len);
 			continue;
 		}
 
@@ -286,35 +294,38 @@ static bool client_data_cb(struct client *cl, char *buf, int len)
 			break;
 
 		*sep = 0;
-		cur_len = sep + 2 - buf;
 
 		r->content_length = strtoul(buf + offset, &sep, 16);
 		r->transfer_chunked++;
+		ustream_consume(cl->us, sep + 2 - buf);
 
 		/* invalid chunk length */
-		if (sep && *sep)
-			goto abort;
+		if (sep && *sep) {
+			r->content_length = 0;
+			r->transfer_chunked = 0;
+			break;
+		}
 
 		/* empty chunk == eof */
-		if (!r->content_length)
+		if (!r->content_length) {
 			r->transfer_chunked = false;
-
-		continue;
-
-abort:
-		consumed = len;
-		r->content_length = 0;
-		r->transfer_chunked = 0;
-		break;
+			break;
+		}
 	}
 
-	ustream_consume(cl->us, consumed);
-	if (!r->content_length && !r->transfer_chunked) {
+	buf = ustream_get_read_buf(cl->us, &len);
+	if (!r->content_length && !r->transfer_chunked &&
+		cl->state != CLIENT_STATE_DONE) {
 		if (cl->dispatch.data_done)
 			cl->dispatch.data_done(cl);
 
 		cl->state = CLIENT_STATE_DONE;
 	}
+}
+
+static bool client_data_cb(struct client *cl, char *buf, int len)
+{
+	client_poll_post_data(cl);
 	return false;
 }
 

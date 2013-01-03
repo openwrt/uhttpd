@@ -144,6 +144,8 @@ struct dispatch {
 	void (*write_cb)(struct client *cl);
 	void (*close_fds)(struct client *cl);
 	void (*free)(struct client *cl);
+	bool data_blocked;
+
 	union {
 		struct {
 			struct blob_attr **hdr;
@@ -208,6 +210,7 @@ void __printf(4, 5)
 uh_client_error(struct client *cl, int code, const char *summary, const char *fmt, ...);
 
 void uh_handle_request(struct client *cl);
+void client_poll_post_data(struct client *cl);
 
 void uh_auth_add(const char *path, const char *user, const char *pass);
 bool uh_auth_check(struct client *cl, struct path_info *pi);

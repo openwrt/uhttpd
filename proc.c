@@ -235,6 +235,18 @@ static void proc_relay_write_cb(struct ustream *us, int bytes)
 	if (ustream_pending_data(us, true))
 		return;
 
+	cl->dispatch.data_blocked = false;
+	us->notify_write = NULL;
+	client_poll_post_data(cl);
+}
+
+static void proc_relay_write_close_cb(struct ustream *us, int bytes)
+{
+	struct client *cl = container_of(us, struct client, dispatch.proc.r.sfd.stream);
+
+	if (ustream_pending_data(us, true))
+		return;
+
 	proc_write_close(cl);
 }
 
@@ -243,6 +255,10 @@ static void proc_data_send(struct client *cl, const char *data, int len)
 	struct ustream *us = &cl->dispatch.proc.r.sfd.stream;
 
 	ustream_write(us, data, len, false);
+	if (ustream_pending_data(us, true)) {
+		cl->dispatch.data_blocked = true;
+		us->notify_write = proc_relay_write_cb;
+	}
 }
 
 static void proc_data_done(struct client *cl)
@@ -250,7 +266,7 @@ static void proc_data_done(struct client *cl)
 	struct ustream *us = &cl->dispatch.proc.r.sfd.stream;
 
 	if (ustream_pending_data(us, true)) {
-		us->notify_write = proc_relay_write_cb;
+		us->notify_write = proc_relay_write_close_cb;
 		return;
 	}
 
