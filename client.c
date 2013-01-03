@@ -354,6 +354,7 @@ static void client_read_cb(struct client *cl)
 
 static void client_close(struct client *cl)
 {
+	n_clients--;
 	uh_dispatch_done(cl);
 	uloop_timeout_cancel(&cl->timeout);
 	ustream_free(&cl->sfd.stream);
