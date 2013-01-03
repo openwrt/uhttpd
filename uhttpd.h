@@ -82,7 +82,6 @@ struct http_request {
 	int content_length;
 	bool expect_cont;
 	uint8_t transfer_chunked;
-	const char *url;
 	const struct auth_realm *realm;
 };
 

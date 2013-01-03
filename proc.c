@@ -123,9 +123,11 @@ struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi)
 	struct blob_attr *data = cl->hdr.head;
 	struct env_var *vars = (void *) uh_buf;
 	struct blob_attr *tb[__HDR_MAX];
+	const char *url;
 	int len;
 	int i;
 
+	url = blobmsg_data(blob_data(cl->hdr.head));
 	len = ARRAY_SIZE(proc_header_env);
 	len += ARRAY_SIZE(extra_vars);
 	len *= sizeof(struct env_var);
@@ -136,7 +138,7 @@ struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi)
 	extra_vars[VAR_SCRIPT_FILE].value = pi->phys;
 	extra_vars[VAR_DOCROOT].value = pi->root;
 	extra_vars[VAR_QUERY].value = pi->query ? pi->query : "";
-	extra_vars[VAR_REQUEST].value = req->url;
+	extra_vars[VAR_REQUEST].value = url;
 	extra_vars[VAR_PROTO].value = http_versions[req->version];
 	extra_vars[VAR_METHOD].value = http_methods[req->method];
 	extra_vars[VAR_PATH_INFO].value = pi->info;

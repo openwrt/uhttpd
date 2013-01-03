@@ -685,7 +685,7 @@ static bool __handle_file_request(struct client *cl, const char *url)
 void uh_handle_request(struct client *cl)
 {
 	struct dispatch_handler *d;
-	const char *url = cl->request.url;
+	const char *url = blobmsg_data(blob_data(cl->hdr.head));;
 
 	d = dispatch_find(url, NULL);
 	if (d) {
@@ -697,5 +697,5 @@ void uh_handle_request(struct client *cl)
 	    __handle_file_request(cl, conf.error_handler))
 		return;
 
-	uh_client_error(cl, 404, "Not Found", "The requested URL %s was not found on this server.", cl->request.url);
+	uh_client_error(cl, 404, "Not Found", "The requested URL %s was not found on this server.", url);
 }

@@ -142,9 +142,9 @@ static int client_parse_request(struct client *cl, char *data)
 	if (!type || !path || !version)
 		return CLIENT_STATE_DONE;
 
-	memset(&cl->request, 0, sizeof(cl->request));
-	req->url = path;
+	blobmsg_add_string(&cl->hdr, "URL", path);
 
+	memset(&cl->request, 0, sizeof(cl->request));
 	h_method = find_idx(http_methods, ARRAY_SIZE(http_methods), type);
 	h_version = find_idx(http_versions, ARRAY_SIZE(http_versions), version);
 	if (h_method < 0 || h_version < 0) {
@@ -168,9 +168,8 @@ static bool client_init_cb(struct client *cl, char *buf, int len)
 
 	*newline = 0;
 	blob_buf_init(&cl->hdr, 0);
-	blobmsg_add_string(&cl->hdr, "REQUEST", buf);
+	cl->state = client_parse_request(cl, buf);
 	ustream_consume(cl->us, newline + 2 - buf);
-	cl->state = client_parse_request(cl, (char *) blobmsg_data(blob_data(cl->hdr.head)));
 	if (cl->state == CLIENT_STATE_DONE)
 		uh_header_error(cl, 400, "Bad Request");
 
