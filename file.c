@@ -233,8 +233,10 @@ uh_path_lookup(struct client *cl, const char *url)
 			continue;
 
 		strcpy(pathptr, idx->name);
-		if (!stat(path_phys, &s) && (s.st_mode & S_IFREG))
+		if (!stat(path_phys, &s) && (s.st_mode & S_IFREG)) {
+			memcpy(&p.stat, &s, sizeof(p.stat));
 			break;
+		}
 
 		*pathptr = 0;
 	}
