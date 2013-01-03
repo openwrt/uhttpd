@@ -19,6 +19,7 @@
 
 #define _GNU_SOURCE
 #define _XOPEN_SOURCE	700
+#include <strings.h>
 #include "uhttpd.h"
 
 static LIST_HEAD(auth_realms);

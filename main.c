@@ -17,6 +17,7 @@
  *  limitations under the License.
  */
 
+#define _BSD_SOURCE
 #define _GNU_SOURCE
 #define _XOPEN_SOURCE	700
 #include <sys/types.h>
@@ -27,7 +28,6 @@
 #include <errno.h>
 #include <netdb.h>
 #include <signal.h>
-#include <unistd.h>
 
 #include <libubox/usock.h>
 

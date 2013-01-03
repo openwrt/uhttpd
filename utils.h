@@ -27,6 +27,8 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <alloca.h>
+#include <time.h>
 #include <unistd.h>
 
 struct uh_addr {
