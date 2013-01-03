@@ -17,6 +17,8 @@
  *  limitations under the License.
  */
 
+#define _GNU_SOURCE
+#define _XOPEN_SOURCE	700
 #include "uhttpd.h"
 
 static LIST_HEAD(auth_realms);

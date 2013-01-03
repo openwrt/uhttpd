@@ -17,6 +17,8 @@
  *  limitations under the License.
  */
 
+#define _GNU_SOURCE
+#define _XOPEN_SOURCE	700
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -25,6 +27,7 @@
 #include <errno.h>
 #include <netdb.h>
 #include <signal.h>
+#include <unistd.h>
 
 #include <libubox/usock.h>
 
