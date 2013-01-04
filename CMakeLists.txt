@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.6)
 
 PROJECT(uhttpd C)
+SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 ADD_DEFINITIONS(-Os -Wall -Werror -Wmissing-declarations --std=gnu99 -g3)
 
 IF(APPLE)
