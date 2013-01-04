@@ -245,6 +245,16 @@ static void proc_write_cb(struct uloop_fd *fd, unsigned int events)
 	client_poll_post_data(cl);
 }
 
+static void proc_relay_write_cb(struct client *cl)
+{
+	struct dispatch_proc *p = &cl->dispatch.proc;
+
+	if (ustream_pending_data(cl->us, true))
+		return;
+
+	ustream_set_read_blocked(&p->r.sfd.stream, false);
+}
+
 static int proc_data_send(struct client *cl, const char *data, int len)
 {
 	struct dispatch_proc *p = &cl->dispatch.proc;
@@ -331,6 +341,7 @@ bool uh_create_process(struct client *cl, struct path_info *pi,
 	d->close_fds = proc_close_fds;
 	d->data_send = proc_data_send;
 	d->data_done = proc_write_close;
+	d->write_cb = proc_relay_write_cb;
 	proc->r.header_cb = proc_handle_header;
 	proc->r.header_end = proc_handle_header_end;
 	proc->r.close = proc_handle_close;
