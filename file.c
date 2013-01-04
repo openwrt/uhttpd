@@ -18,12 +18,14 @@
  */
 
 #define _BSD_SOURCE
+#define _DARWIN_C_SOURCE
 #define _XOPEN_SOURCE 700
 
 #include <sys/types.h>
 #include <sys/dir.h>
 #include <time.h>
 #include <strings.h>
+#include <dirent.h>
 
 #include <libubox/blobmsg.h>
 
@@ -434,21 +436,69 @@ static int uh_file_if_unmodified_since(struct client *cl, struct stat *s)
 	return true;
 }
 
-
-static int uh_file_scandir_filter_dir(const struct dirent *e)
+static int dirent_cmp(const struct dirent **a, const struct dirent **b)
 {
-	return strcmp(e->d_name, ".") ? 1 : 0;
+	bool dir_a = !!((*a)->d_type & DT_DIR);
+	bool dir_b = !!((*b)->d_type & DT_DIR);
+
+	/* directories first */
+	if (dir_a != dir_b)
+		return dir_b - dir_a;
+
+	return alphasort(a, b);
+}
+
+static void list_entries(struct client *cl, struct dirent **files, int count,
+			 const char *path, char *local_path)
+{
+	const char *suffix = "/";
+	const char *type = "directory";
+	unsigned int mode = S_IXOTH;
+	struct stat s;
+	char *file;
+	char buf[128];
+	int i;
+
+	file = local_path + strlen(local_path);
+	for (i = 0; i < count; i++) {
+		const char *name = files[i]->d_name;
+		bool dir = !!(files[i]->d_type & DT_DIR);
+
+		if (name[0] == '.' && name[1] == 0)
+			continue;
+
+		sprintf(file, "%s", name);
+		if (stat(local_path, &s))
+			continue;
+
+		if (!dir) {
+			suffix = "";
+			mode = S_IROTH;
+			type = uh_file_mime_lookup(local_path);
+		}
+
+		if (!(s.st_mode & mode))
+			continue;
+
+		uh_chunk_printf(cl,
+				"<li><strong><a href='%s%s%s'>%s</a>%s"
+				"</strong><br /><small>modified: %s"
+				"<br />%s - %.02f kbyte<br />"
+				"<br /></small></li>",
+				path, name, suffix,
+				name, suffix,
+				uh_file_unix2date(s.st_mtime, buf, sizeof(buf)),
+				type, s.st_size / 1024.0);
+
+		*file = 0;
+		free(files[i]);
+	}
 }
 
 static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 {
-	int i;
-	int count = 0;
-	char *filename = uh_buf;
-	char *pathptr;
 	struct dirent **files = NULL;
-	struct stat s;
-	char buf[128];
+	int count = 0;
 
 	uh_file_response_200(cl, NULL);
 	ustream_printf(cl->us, "Content-Type: text/html\r\n\r\n");
@@ -458,66 +508,15 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 		"<body><h1>Index of %s</h1><hr /><ol>",
 		pi->name, pi->name);
 
-	if ((count = scandir(pi->phys, &files, uh_file_scandir_filter_dir,
-						 alphasort)) > 0)
-	{
-		int len;
-
-		strcpy(filename, pi->phys);
-		len = strlen(filename);
-		pathptr = filename + len;
-		len = PATH_MAX - len;
-
-		/* list subdirs */
-		for (i = 0; i < count; i++) {
-			snprintf(pathptr, len, "%s", files[i]->d_name);
-
-			if (!stat(filename, &s) &&
-				(s.st_mode & S_IFDIR) && (s.st_mode & S_IXOTH))
-				uh_chunk_printf(cl,
-					"<li><strong><a href='%s%s/'>%s</a>/"
-					"</strong><br /><small>modified: %s"
-					"<br />directory - %.02f kbyte<br />"
-					"<br /></small></li>",
-					pi->name, files[i]->d_name,
-					files[i]->d_name,
-					uh_file_unix2date(s.st_mtime, buf, sizeof(buf)),
-					s.st_size / 1024.0);
-
-			*pathptr = 0;
-		}
-
-		/* list files */
-		for (i = 0; i < count; i++) {
-			snprintf(pathptr, len, "%s", files[i]->d_name);
-
-			if (!stat(filename, &s) &&
-				!(s.st_mode & S_IFDIR) && (s.st_mode & S_IROTH))
-				uh_chunk_printf(cl,
-					"<li><strong><a href='%s%s'>%s</a>"
-					"</strong><br /><small>modified: %s"
-					"<br />%s - %.02f kbyte<br />"
-					"<br /></small></li>",
-					pi->name, files[i]->d_name,
-					files[i]->d_name,
-					uh_file_unix2date(s.st_mtime, buf, sizeof(buf)),
-					uh_file_mime_lookup(filename),
-					s.st_size / 1024.0);
-
-			*pathptr = 0;
-		}
+	count = scandir(pi->phys, &files, NULL, dirent_cmp);
+	if (count > 0) {
+		strcpy(uh_buf, pi->phys);
+		list_entries(cl, files, count, pi->name, uh_buf);
 	}
+	free(files);
 
 	uh_chunk_printf(cl, "</ol><hr /></body></html>");
 	uh_request_done(cl);
-
-	if (files)
-	{
-		for (i = 0; i < count; i++)
-			free(files[i]);
-
-		free(files);
-	}
 }
 
 static void file_write_cb(struct client *cl)
