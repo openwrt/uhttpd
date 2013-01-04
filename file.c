@@ -252,7 +252,7 @@ uh_path_lookup(struct client *cl, const char *url)
 
 static const char * uh_file_mime_lookup(const char *path)
 {
-	struct mimetype *m = &uh_mime_types[0];
+	const struct mimetype *m = &uh_mime_types[0];
 	const char *e;
 
 	while (m->extn) {

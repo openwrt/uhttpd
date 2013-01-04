@@ -23,7 +23,7 @@ struct mimetype {
 	const char *mime;
 };
 
-static struct mimetype uh_mime_types[] = {
+static const struct mimetype uh_mime_types[] = {
 
 	{ "txt",     "text/plain" },
 	{ "log",     "text/plain" },
