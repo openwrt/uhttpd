@@ -168,7 +168,11 @@ struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi)
 
 static void proc_close_fds(struct client *cl)
 {
-	close(cl->dispatch.proc.r.sfd.fd.fd);
+	struct dispatch_proc *p = &cl->dispatch.proc;
+
+	close(p->r.sfd.fd.fd);
+	if (p->wrfd.fd >= 0)
+		close(p->wrfd.fd);
 }
 
 static void proc_handle_close(struct relay *r, int ret)
