@@ -29,6 +29,9 @@
 #include <libubox/ustream.h>
 #include <libubox/blob.h>
 #include <libubox/utils.h>
+#ifdef HAVE_TLS
+#include <libubox/ustream-ssl.h>
+#endif
 
 #include "utils.h"
 
@@ -170,11 +173,12 @@ struct client {
 	struct ustream *us;
 	struct ustream_fd sfd;
 #ifdef HAVE_TLS
-	struct ustream_ssl stream_ssl;
+	struct ustream_ssl ssl;
 #endif
 	struct uloop_timeout timeout;
 
 	enum client_state state;
+	bool tls;
 
 	struct http_request request;
 	struct uh_addr srv_addr, peer_addr;
@@ -192,7 +196,7 @@ extern struct dispatch_handler cgi_dispatch;
 
 void uh_index_add(const char *filename);
 
-bool uh_accept_client(int fd);
+bool uh_accept_client(int fd, bool tls);
 
 void uh_unblock_listeners(void);
 void uh_setup_listeners(void);
@@ -214,6 +218,8 @@ uh_client_error(struct client *cl, int code, const char *summary, const char *fm
 
 void uh_handle_request(struct client *cl);
 void client_poll_post_data(struct client *cl);
+void uh_client_read_cb(struct client *cl);
+void uh_client_notify_state(struct client *cl);
 
 void uh_auth_add(const char *path, const char *user, const char *pass);
 bool uh_auth_check(struct client *cl, struct path_info *pi);

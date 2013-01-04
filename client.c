@@ -21,6 +21,7 @@
 #include <ctype.h>
 
 #include "uhttpd.h"
+#include "tls.h"
 
 static LIST_HEAD(clients);
 
@@ -356,7 +357,7 @@ static read_cb_t read_cbs[] = {
 	[CLIENT_STATE_DATA] = client_data_cb,
 };
 
-static void client_read_cb(struct client *cl)
+void uh_client_read_cb(struct client *cl)
 {
 	struct ustream *us = cl->us;
 	char *str;
@@ -384,6 +385,8 @@ static void client_close(struct client *cl)
 	n_clients--;
 	uh_dispatch_done(cl);
 	uloop_timeout_cancel(&cl->timeout);
+	if (cl->tls)
+		uh_tls_client_detach(cl);
 	ustream_free(&cl->sfd.stream);
 	close(cl->sfd.fd.fd);
 	list_del(&cl->list);
@@ -393,11 +396,26 @@ static void client_close(struct client *cl)
 	uh_unblock_listeners();
 }
 
+void uh_client_notify_state(struct client *cl)
+{
+	struct ustream *s = cl->us;
+
+	if (!s->write_error) {
+		if (cl->state == CLIENT_STATE_DATA)
+			return;
+
+		if (!s->eof || s->w.data_bytes)
+			return;
+	}
+
+	return client_close(cl);
+}
+
 static void client_ustream_read_cb(struct ustream *s, int bytes)
 {
 	struct client *cl = container_of(s, struct client, sfd);
 
-	client_read_cb(cl);
+	uh_client_read_cb(cl);
 }
 
 static void client_ustream_write_cb(struct ustream *s, int bytes)
@@ -412,15 +430,7 @@ static void client_notify_state(struct ustream *s)
 {
 	struct client *cl = container_of(s, struct client, sfd);
 
-	if (!s->write_error) {
-		if (cl->state == CLIENT_STATE_DATA)
-			return;
-
-		if (!s->eof || s->w.data_bytes)
-			return;
-	}
-
-	return client_close(cl);
+	uh_client_notify_state(cl);
 }
 
 static void set_addr(struct uh_addr *addr, void *src)
@@ -438,7 +448,7 @@ static void set_addr(struct uh_addr *addr, void *src)
 	}
 }
 
-bool uh_accept_client(int fd)
+bool uh_accept_client(int fd, bool tls)
 {
 	static struct client *next_client;
 	struct client *cl;
@@ -461,11 +471,17 @@ bool uh_accept_client(int fd)
 	sl = sizeof(addr);
 	getsockname(fd, (struct sockaddr *) &addr, &sl);
 	set_addr(&cl->srv_addr, &addr);
+
 	cl->us = &cl->sfd.stream;
+	if (tls) {
+		uh_tls_client_attach(cl);
+	} else {
+		cl->us->notify_read = client_ustream_read_cb;
+		cl->us->notify_write = client_ustream_write_cb;
+		cl->us->notify_state = client_notify_state;
+	}
+
 	cl->us->string_data = true;
-	cl->us->notify_read = client_ustream_read_cb;
-	cl->us->notify_write = client_ustream_write_cb;
-	cl->us->notify_state = client_notify_state;
 	ustream_fd_init(&cl->sfd, sfd);
 
 	cl->timeout.cb = client_timeout;
@@ -476,6 +492,7 @@ bool uh_accept_client(int fd)
 	next_client = NULL;
 	n_clients++;
 	cl->id = client_id++;
+
 	return true;
 }
 

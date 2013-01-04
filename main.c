@@ -32,6 +32,7 @@
 #include <libubox/usock.h>
 
 #include "uhttpd.h"
+#include "tls.h"
 
 char uh_buf[4096];
 
@@ -190,11 +191,13 @@ static void fixup_prefix(char *str)
 
 int main(int argc, char **argv)
 {
+	const char *tls_key, *tls_crt;
 	bool nofork = false;
 	char *port;
 	int opt, ch;
 	int cur_fd;
 	int bound = 0;
+	int n_tls = 0;
 
 	BUILD_BUG_ON(sizeof(uh_buf) < PATH_MAX);
 
@@ -207,6 +210,7 @@ int main(int argc, char **argv)
 
 		switch(ch) {
 		case 's':
+			n_tls++;
 			tls = true;
 			/* fall through */
 		case 'p':
@@ -324,6 +328,13 @@ int main(int argc, char **argv)
 			conf.file = optarg;
 			break;
 
+		case 'C':
+			tls_crt = optarg;
+			break;
+
+		case 'K':
+			tls_key = optarg;
+			break;
 		default:
 			return usage(argv[0]);
 		}
@@ -334,6 +345,22 @@ int main(int argc, char **argv)
 	if (!bound) {
 		fprintf(stderr, "Error: No sockets bound, unable to continue\n");
 		return 1;
+	}
+
+	if (n_tls) {
+		if (!tls_crt || !tls_key) {
+			fprintf(stderr, "Please specify a certificate and "
+					"a key file to enable SSL support\n");
+			return 1;
+		}
+
+#ifdef HAVE_TLS
+		if (uh_tls_init(tls_key, tls_crt))
+		    return 1;
+#else
+		fprintf(stderr, "Error: TLS support not compiled in.\n");
+		return 1;
+#endif
 	}
 
 	/* fork (if not disabled) */

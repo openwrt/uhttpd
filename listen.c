@@ -79,7 +79,7 @@ static void listener_cb(struct uloop_fd *fd, unsigned int events)
 	struct listener *l = container_of(fd, struct listener, fd);
 
 	while (1) {
-		if (!uh_accept_client(fd->fd))
+		if (!uh_accept_client(fd->fd, l->tls))
 			break;
 	}
 
