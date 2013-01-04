@@ -185,7 +185,7 @@ static void fixup_prefix(char *str)
 
 int main(int argc, char **argv)
 {
-	const char *tls_key, *tls_crt;
+	const char *tls_key = NULL, *tls_crt = NULL;
 	bool nofork = false;
 	char *port;
 	int opt, ch;
