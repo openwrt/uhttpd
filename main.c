@@ -84,20 +84,14 @@ static void uh_config_parse(void)
 
 			conf.error_handler = strdup(col1);
 		}
-#ifdef HAVE_CGI
 		else if ((line[0] == '*') && (strchr(line, ':') != NULL)) {
 			if (!(col1 = strchr(line, '*')) || (*col1++ = 0) ||
 				!(col2 = strchr(col1, ':')) || (*col2++ = 0) ||
 				!(eol = strchr(col2, '\n')) || (*eol++  = 0))
 				continue;
 
-			if (!uh_interpreter_add(col1, col2))
-				fprintf(stderr,
-						"Unable to add interpreter %s for extension %s: "
-						"Out of memory\n", col2, col1
-				);
+			uh_interpreter_add(col1, col2);
 		}
-#endif
 	}
 
 	fclose(c);
