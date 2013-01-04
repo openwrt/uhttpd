@@ -36,7 +36,7 @@ void uh_interpreter_add(const char *ext, const char *path)
 	list_add_tail(&in->list, &interpreters);
 }
 
-static void cgi_main(struct client *cl, struct path_info *pi)
+static void cgi_main(struct client *cl, struct path_info *pi, const char *url)
 {
 	const struct interpreter *ip = pi->ip;
 	struct env_var *var;
@@ -74,7 +74,7 @@ static void cgi_handle_request(struct client *cl, const char *url, struct path_i
 		return;
 	}
 
-	if (!uh_create_process(cl, pi, cgi_main)) {
+	if (!uh_create_process(cl, pi, url, cgi_main)) {
 		uh_client_error(cl, 500, "Internal Server Error",
 				"Failed to create CGI process: %s", strerror(errno));
 		return;

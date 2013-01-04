@@ -5,6 +5,7 @@ SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 ADD_DEFINITIONS(-Os -Wall -Werror -Wmissing-declarations --std=gnu99 -g3)
 
 OPTION(TLS_SUPPORT "TLS support" ON)
+OPTION(LUA_SUPPORT "Lua support" ON)
 
 IF(APPLE)
   INCLUDE_DIRECTORIES(/opt/local/include)
@@ -16,7 +17,7 @@ IF(LIBS STREQUAL "LIBS-NOTFOUND")
 	SET(LIBS "")
 ENDIF()
 
-SET(SOURCES main.c listen.c client.c utils.c file.c auth.c cgi.c relay.c proc.c)
+SET(SOURCES main.c listen.c client.c utils.c file.c auth.c cgi.c relay.c proc.c plugin.c)
 IF(TLS_SUPPORT)
 	SET(SOURCES ${SOURCES} tls.c)
 	ADD_DEFINITIONS(-DHAVE_TLS)
@@ -24,3 +25,44 @@ ENDIF()
 
 ADD_EXECUTABLE(uhttpd ${SOURCES})
 TARGET_LINK_LIBRARIES(uhttpd ubox dl ${LIBS})
+
+SET(PLUGINS "")
+IF(LUA_SUPPORT)
+	FIND_PROGRAM(PKG_CONFIG pkg-config)
+
+	IF(NOT LUA_CFLAGS AND PKG_CONFIG)
+		EXECUTE_PROCESS(
+			COMMAND pkg-config --silence-errors --cflags lua5.1
+			OUTPUT_VARIABLE LUA_CFLAGS
+			OUTPUT_STRIP_TRAILING_WHITESPACE
+		)
+	ENDIF()
+
+	IF(NOT LUA_LIBS AND PKG_CONFIG)
+		EXECUTE_PROCESS(
+			COMMAND pkg-config --silence-errors --libs lua5.1
+			OUTPUT_VARIABLE LUA_LIBS
+			OUTPUT_STRIP_TRAILING_WHITESPACE
+		)
+	ENDIF()
+
+	IF(NOT LUA_LIBS)
+		SET(LUA_LIBS "lua")
+	ENDIF()
+
+	SET(PLUGINS ${PLUGINS} uhttpd_lua)
+	ADD_DEFINITIONS(-DHAVE_LUA ${LUA_CFLAGS})
+	ADD_LIBRARY(uhttpd_lua MODULE lua.c)
+	TARGET_LINK_LIBRARIES(uhttpd_lua ${LUA_LIBS} m dl)
+ENDIF()
+
+IF(PLUGINS)
+	SET_TARGET_PROPERTIES(${PLUGINS} PROPERTIES
+		PREFIX ""
+	)
+ENDIF()
+
+INSTALL(TARGETS uhttpd ${PLUGINS}
+	RUNTIME DESTINATION bin
+	LIBRARY DESTINATION lib
+)

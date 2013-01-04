@@ -49,6 +49,8 @@ struct config {
 	const char *error_handler;
 	const char *cgi_prefix;
 	const char *cgi_path;
+	const char *lua_handler;
+	const char *lua_prefix;
 	int no_symlinks;
 	int no_dirlists;
 	int network_timeout;
@@ -235,7 +237,9 @@ void uh_relay_close(struct relay *r, int ret);
 void uh_relay_free(struct relay *r);
 
 struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi);
-bool uh_create_process(struct client *cl, struct path_info *pi,
-		       void (*cb)(struct client *cl, struct path_info *pi));
+bool uh_create_process(struct client *cl, struct path_info *pi, const char *url,
+		       void (*cb)(struct client *cl, struct path_info *pi, const char *url));
+
+int uh_plugin_init(const char *name);
 
 #endif

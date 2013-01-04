@@ -329,6 +329,15 @@ int main(int argc, char **argv)
 		case 'K':
 			tls_key = optarg;
 			break;
+#ifdef HAVE_LUA
+		case 'l':
+			conf.lua_prefix = optarg;
+			break;
+
+		case 'L':
+			conf.lua_handler = optarg;
+			break;
+#endif
 		default:
 			return usage(argv[0]);
 		}
@@ -356,6 +365,17 @@ int main(int argc, char **argv)
 		return 1;
 #endif
 	}
+
+#ifdef HAVE_LUA
+	if (conf.lua_handler || conf.lua_prefix) {
+		if (!conf.lua_handler || !conf.lua_prefix) {
+			fprintf(stderr, "Need handler and prefix to enable Lua support\n");
+			return 1;
+		}
+		if (uh_plugin_init("uhttpd_lua.so"))
+			return 1;
+	}
+#endif
 
 	/* fork (if not disabled) */
 	if (!nofork) {
