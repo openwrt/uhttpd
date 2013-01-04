@@ -192,7 +192,7 @@ extern struct dispatch_handler cgi_dispatch;
 
 void uh_index_add(const char *filename);
 
-void uh_accept_client(int fd);
+bool uh_accept_client(int fd);
 
 void uh_unblock_listeners(void);
 void uh_setup_listeners(void);

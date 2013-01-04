@@ -438,7 +438,7 @@ static void set_addr(struct uh_addr *addr, void *src)
 	}
 }
 
-void uh_accept_client(int fd)
+bool uh_accept_client(int fd)
 {
 	static struct client *next_client;
 	struct client *cl;
@@ -455,7 +455,7 @@ void uh_accept_client(int fd)
 	sl = sizeof(addr);
 	sfd = accept(fd, (struct sockaddr *) &addr, &sl);
 	if (sfd < 0)
-		return;
+		return false;
 
 	set_addr(&cl->peer_addr, &addr);
 	sl = sizeof(addr);
@@ -476,6 +476,7 @@ void uh_accept_client(int fd)
 	next_client = NULL;
 	n_clients++;
 	cl->id = client_id++;
+	return true;
 }
 
 void uh_close_fds(void)

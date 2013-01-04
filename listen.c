@@ -56,13 +56,17 @@ void uh_unblock_listeners(void)
 {
 	struct listener *l;
 
-	if (!n_blocked && conf.max_requests &&
+	if ((!n_blocked && conf.max_requests) ||
 	    n_clients >= conf.max_requests)
 		return;
 
 	list_for_each_entry(l, &listeners, list) {
 		if (!l->blocked)
 			continue;
+
+		l->fd.cb(&l->fd, ULOOP_READ);
+	    if (n_clients >= conf.max_requests)
+			break;
 
 		n_blocked--;
 		l->blocked = false;
@@ -74,7 +78,10 @@ static void listener_cb(struct uloop_fd *fd, unsigned int events)
 {
 	struct listener *l = container_of(fd, struct listener, fd);
 
-	uh_accept_client(fd->fd);
+	while (1) {
+		if (!uh_accept_client(fd->fd))
+			break;
+	}
 
 	if (conf.max_requests && n_clients >= conf.max_requests)
 		uh_block_listener(l);
