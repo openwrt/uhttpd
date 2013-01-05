@@ -89,6 +89,19 @@ static int uh_lua_recv(lua_State *L)
 	}
 }
 
+static int uh_lua_send(lua_State *L)
+{
+	const char *buf;
+	size_t len;
+
+	buf = luaL_checklstring(L, 1, &len);
+	if (len > 0)
+		len = write(STDOUT_FILENO, buf, len);
+
+	lua_pushnumber(L, len);
+	return 1;
+}
+
 static int
 uh_lua_strconvert(lua_State *L, int (*convert)(char *, int, const char *, int))
 {
@@ -138,13 +151,10 @@ static lua_State *uh_lua_state_init(void)
 	/* build uhttpd api table */
 	lua_newtable(L);
 
-	/* 
-	 * use print as send and sendc implementation,
-	 * chunked transfer is handled in the main server
-	 */
-	lua_getglobal(L, "print");
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -3, "send");
+	lua_pushcfunction(L, uh_lua_send);
+	lua_setfield(L, -2, "send");
+
+	lua_pushcfunction(L, uh_lua_send);
 	lua_setfield(L, -2, "sendc");
 
 	lua_pushcfunction(L, uh_lua_recv);
