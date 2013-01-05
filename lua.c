@@ -192,11 +192,13 @@ error:
 
 static void lua_main(struct client *cl, struct path_info *pi, const char *url)
 {
+	struct blob_attr *cur;
 	const char *error;
 	struct env_var *var;
 	lua_State *L = _L;
 	int path_len, prefix_len;
 	char *str;
+	int rem;
 
 	lua_getglobal(L, UH_LUA_CB);
 
@@ -226,6 +228,13 @@ static void lua_main(struct client *cl, struct path_info *pi, const char *url)
 
 	lua_pushnumber(L, 0.9 + (cl->request.version / 10.0));
 	lua_setfield(L, -2, "HTTP_VERSION");
+
+	lua_newtable(L);
+	blob_for_each_attr(cur, cl->hdr.head, rem) {
+		lua_pushstring(L, blobmsg_data(cur));
+		lua_setfield(L, -2, blobmsg_name(cur));
+	}
+	lua_setfield(L, -2, "headers");
 
 	switch(lua_pcall(L, 1, 0, 0)) {
 	case LUA_ERRMEM:
