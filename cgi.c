@@ -36,7 +36,7 @@ void uh_interpreter_add(const char *ext, const char *path)
 	list_add_tail(&in->list, &interpreters);
 }
 
-static void cgi_main(struct client *cl, struct path_info *pi, const char *url)
+static void cgi_main(struct client *cl, struct path_info *pi, char *url)
 {
 	const struct interpreter *ip = pi->ip;
 	struct env_var *var;
@@ -63,7 +63,7 @@ static void cgi_main(struct client *cl, struct path_info *pi, const char *url)
 	       "  %s: %s\n", ip ? ip->path : pi->phys, strerror(errno));
 }
 
-static void cgi_handle_request(struct client *cl, const char *url, struct path_info *pi)
+static void cgi_handle_request(struct client *cl, char *url, struct path_info *pi)
 {
 	unsigned int mode = S_IFREG | S_IXOTH;
 

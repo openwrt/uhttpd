@@ -200,7 +200,7 @@ error:
 	return NULL;
 }
 
-static void lua_main(struct client *cl, struct path_info *pi, const char *url)
+static void lua_main(struct client *cl, struct path_info *pi, char *url)
 {
 	struct blob_attr *cur;
 	const char *error;
@@ -261,7 +261,7 @@ static void lua_main(struct client *cl, struct path_info *pi, const char *url)
 	exit(0);
 }
 
-static void lua_handle_request(struct client *cl, const char *url, struct path_info *pi)
+static void lua_handle_request(struct client *cl, char *url, struct path_info *pi)
 {
 	static struct path_info _pi;
 

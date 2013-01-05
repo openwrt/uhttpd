@@ -296,8 +296,8 @@ static int proc_data_send(struct client *cl, const char *data, int len)
 	return retlen;
 }
 
-bool uh_create_process(struct client *cl, struct path_info *pi, const char *url,
-		       void (*cb)(struct client *cl, struct path_info *pi, const char *url))
+bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
+		       void (*cb)(struct client *cl, struct path_info *pi, char *url))
 {
 	struct dispatch *d = &cl->dispatch;
 	struct dispatch_proc *proc = &d->proc;

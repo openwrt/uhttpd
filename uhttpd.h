@@ -148,7 +148,7 @@ struct dispatch_handler {
 
 	bool (*check_url)(const char *url);
 	bool (*check_path)(struct path_info *pi, const char *url);
-	void (*handle_request)(struct client *cl, const char *url, struct path_info *pi);
+	void (*handle_request)(struct client *cl, char *url, struct path_info *pi);
 };
 
 struct dispatch {
@@ -237,8 +237,8 @@ void uh_relay_close(struct relay *r, int ret);
 void uh_relay_free(struct relay *r);
 
 struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi);
-bool uh_create_process(struct client *cl, struct path_info *pi, const char *url,
-		       void (*cb)(struct client *cl, struct path_info *pi, const char *url));
+bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
+		       void (*cb)(struct client *cl, struct path_info *pi, char *url));
 
 int uh_plugin_init(const char *name);
 

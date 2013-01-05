@@ -23,8 +23,8 @@ struct uhttpd_ops {
 	void (*dispatch_add)(struct dispatch_handler *d);
 	bool (*path_match)(const char *prefix, const char *url);
 
-	bool (*create_process)(struct client *cl, struct path_info *pi, const char *url,
-			       void (*cb)(struct client *cl, struct path_info *pi, const char *url));
+	bool (*create_process)(struct client *cl, struct path_info *pi, char *url,
+			       void (*cb)(struct client *cl, struct path_info *pi, char *url));
 	struct env_var *(*get_process_vars)(struct client *cl, struct path_info *pi);
 
 	void (*client_error)(struct client *cl, int code, const char *summary, const char *fmt, ...);

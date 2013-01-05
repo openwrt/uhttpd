@@ -644,7 +644,7 @@ dispatch_find(const char *url, struct path_info *pi)
 	return NULL;
 }
 
-static bool __handle_file_request(struct client *cl, const char *url)
+static bool __handle_file_request(struct client *cl, char *url)
 {
 	static const struct blobmsg_policy hdr_policy[__HDR_MAX] = {
 		[HDR_AUTHORIZATION] = { "authorization", BLOBMSG_TYPE_STRING },
@@ -684,7 +684,8 @@ static bool __handle_file_request(struct client *cl, const char *url)
 void uh_handle_request(struct client *cl)
 {
 	struct dispatch_handler *d;
-	const char *url = blobmsg_data(blob_data(cl->hdr.head));;
+	char *url = blobmsg_data(blob_data(cl->hdr.head));;
+	char *error_handler;
 
 	d = dispatch_find(url, NULL);
 	if (d) {
@@ -692,8 +693,12 @@ void uh_handle_request(struct client *cl)
 		return;
 	}
 
-	if (__handle_file_request(cl, url) ||
-	    __handle_file_request(cl, conf.error_handler))
+	if (__handle_file_request(cl, url))
+		return;
+
+	error_handler = alloca(strlen(conf.error_handler) + 1);
+	strcpy(error_handler, conf.error_handler);
+	if (__handle_file_request(cl, error_handler))
 		return;
 
 	uh_client_error(cl, 404, "Not Found", "The requested URL %s was not found on this server.", url);
