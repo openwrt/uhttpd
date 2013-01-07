@@ -27,6 +27,7 @@ static const struct uhttpd_ops ops = {
 	.create_process = uh_create_process,
 	.get_process_vars = uh_get_process_vars,
 	.client_error = uh_client_error,
+	.request_done = uh_request_done,
 	.chunk_write = uh_chunk_write,
 	.urlencode = uh_urlencode,
 	.urldecode = uh_urldecode,
