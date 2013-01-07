@@ -90,7 +90,7 @@ static const struct blobmsg_policy acl_policy[__UH_UBUS_SA_MAX] = {
 
 #define uh_foreach_matching_acl(_acl, _ses, _obj, _func)			\
 	uh_foreach_matching_acl_prefix(_acl, _ses, _obj, _func)			\
-		if (!strncmp((_acl)->object, _obj, (_acl)->sort_len &&)		\
+		if (!strncmp((_acl)->object, _obj, (_acl)->sort_len) &&		\
 		    !fnmatch((_acl)->object, (_obj), FNM_NOESCAPE) &&		\
 		    !fnmatch((_acl)->function, (_func), FNM_NOESCAPE))
 
