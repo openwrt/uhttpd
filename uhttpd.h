@@ -29,6 +29,10 @@
 #include <libubox/ustream.h>
 #include <libubox/blob.h>
 #include <libubox/utils.h>
+#ifdef HAVE_UBUS
+#include <libubus.h>
+#include <json/json.h>
+#endif
 #ifdef HAVE_TLS
 #include <libubox/ustream-ssl.h>
 #endif
@@ -51,6 +55,8 @@ struct config {
 	const char *cgi_path;
 	const char *lua_handler;
 	const char *lua_prefix;
+	const char *ubus_prefix;
+	const char *ubus_socket;
 	int no_symlinks;
 	int no_dirlists;
 	int network_timeout;
@@ -151,6 +157,19 @@ struct dispatch_handler {
 	void (*handle_request)(struct client *cl, char *url, struct path_info *pi);
 };
 
+#ifdef HAVE_UBUS
+struct dispatch_ubus {
+	struct ubus_request req;
+	struct json_tokener *jstok;
+	struct json_object *jsobj;
+	uint32_t obj;
+	int post_len;
+	const char *func;
+	bool req_pending;
+	bool header_sent;
+};
+#endif
+
 struct dispatch {
 	int (*data_send)(struct client *cl, const char *data, int len);
 	void (*data_done)(struct client *cl);
@@ -165,6 +184,9 @@ struct dispatch {
 			int fd;
 		} file;
 		struct dispatch_proc proc;
+#ifdef HAVE_UBUS
+		struct dispatch_ubus ubus;
+#endif
 	};
 };
 
@@ -241,5 +263,6 @@ bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
 		       void (*cb)(struct client *cl, struct path_info *pi, char *url));
 
 int uh_plugin_init(const char *name);
+void uh_plugin_post_init(void);
 
 #endif

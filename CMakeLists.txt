@@ -6,6 +6,7 @@ ADD_DEFINITIONS(-Os -Wall -Werror -Wmissing-declarations --std=gnu99 -g3)
 
 OPTION(TLS_SUPPORT "TLS support" ON)
 OPTION(LUA_SUPPORT "Lua support" ON)
+OPTION(UBUS_SUPPORT "ubus support" ON)
 
 IF(APPLE)
   INCLUDE_DIRECTORIES(/opt/local/include)
@@ -54,6 +55,13 @@ IF(LUA_SUPPORT)
 	ADD_DEFINITIONS(-DHAVE_LUA ${LUA_CFLAGS})
 	ADD_LIBRARY(uhttpd_lua MODULE lua.c)
 	TARGET_LINK_LIBRARIES(uhttpd_lua ${LUA_LIBS} m dl)
+ENDIF()
+
+IF(UBUS_SUPPORT)
+	SET(PLUGINS ${PLUGINS} uhttpd_ubus)
+	ADD_DEFINITIONS(-DHAVE_UBUS)
+	ADD_LIBRARY(uhttpd_ubus MODULE ubus.c)
+	TARGET_LINK_LIBRARIES(uhttpd_ubus ubus ubox blobmsg_json json)
 ENDIF()
 
 IF(PLUGINS)

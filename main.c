@@ -40,6 +40,7 @@ static int run_server(void)
 {
 	uloop_init();
 	uh_setup_listeners();
+	uh_plugin_post_init();
 	uloop_run();
 
 	return 0;
@@ -338,6 +339,15 @@ int main(int argc, char **argv)
 			conf.lua_handler = optarg;
 			break;
 #endif
+#ifdef HAVE_UBUS
+		case 'u':
+			conf.ubus_prefix = optarg;
+			break;
+
+		case 'U':
+			conf.ubus_socket = optarg;
+			break;
+#endif
 		default:
 			return usage(argv[0]);
 		}
@@ -375,6 +385,10 @@ int main(int argc, char **argv)
 		if (uh_plugin_init("uhttpd_lua.so"))
 			return 1;
 	}
+#endif
+#ifdef HAVE_UBUS
+	if (conf.ubus_prefix && uh_plugin_init("uhttpd_ubus.so"))
+		return 1;
 #endif
 
 	/* fork (if not disabled) */

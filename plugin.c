@@ -21,6 +21,8 @@
 #include "uhttpd.h"
 #include "plugin.h"
 
+static LIST_HEAD(plugins);
+
 static const struct uhttpd_ops ops = {
 	.dispatch_add = uh_dispatch_add,
 	.path_match = uh_path_match,
@@ -53,5 +55,14 @@ int uh_plugin_init(const char *name)
 		return -ENOENT;
 	}
 
+	list_add(&p->list, &plugins);
 	return p->init(&ops, &conf);
+}
+
+void uh_plugin_post_init(void)
+{
+	struct uhttpd_plugin *p;
+
+	list_for_each_entry(p, &plugins, list)
+		p->post_init();
 }
