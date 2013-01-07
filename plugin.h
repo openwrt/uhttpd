@@ -27,6 +27,7 @@ struct uhttpd_ops {
 			       void (*cb)(struct client *cl, struct path_info *pi, char *url));
 	struct env_var *(*get_process_vars)(struct client *cl, struct path_info *pi);
 
+	void (*http_header)(struct client *cl, int code, const char *summary);
 	void (*client_error)(struct client *cl, int code, const char *summary, const char *fmt, ...);
 	void (*request_done)(struct client *cl);
 	void (*chunk_write)(struct client *cl, const void *data, int len);
