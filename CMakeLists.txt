@@ -60,7 +60,7 @@ ENDIF()
 IF(UBUS_SUPPORT)
 	SET(PLUGINS ${PLUGINS} uhttpd_ubus)
 	ADD_DEFINITIONS(-DHAVE_UBUS)
-	ADD_LIBRARY(uhttpd_ubus MODULE ubus.c)
+	ADD_LIBRARY(uhttpd_ubus MODULE ubus.c ubus-session.c)
 	TARGET_LINK_LIBRARIES(uhttpd_ubus ubus ubox blobmsg_json json)
 ENDIF()
 

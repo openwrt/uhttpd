@@ -24,13 +24,7 @@
 #include <libubox/blobmsg_json.h>
 
 #define UBUS_SID_LEN	32
-#define UH_UBUS_MAX_POST_SIZE	4096
-
-struct uh_ubus_request_data {
-	const char *sid;
-	const char *object;
-	const char *function;
-};
+#define UBUS_DEFAULT_SESSION_TIMEOUT	300
 
 struct uh_ubus_session {
 	struct avl_node avl;
@@ -54,5 +48,9 @@ struct uh_ubus_session_acl {
 	const char *function;
 	int sort_len;
 };
+
+int ubus_session_api_init(struct ubus_context *ctx);
+struct uh_ubus_session *uh_ubus_session_get(const char *id);
+bool uh_ubus_session_acl_allowed(struct uh_ubus_session *ses, const char *obj, const char *fun);
 
 #endif
