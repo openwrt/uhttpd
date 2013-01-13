@@ -176,6 +176,9 @@ uh_path_lookup(struct client *cl, const char *url)
 		exists = !!canonpath(uh_buf, path_phys);
 		uh_buf[i] = ch;
 
+		if (!exists)
+			continue;
+
 		snprintf(path_info, sizeof(path_info), "%s", uh_buf + i);
 		break;
 	}
