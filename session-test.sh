@@ -27,7 +27,7 @@ wget -q -O- \
 			"test",
 			{},
 		]
-	}' "http://localhost:8080/ubus/$sid/session/list"
+	}' "http://localhost:8080/ubus/$sid"
 echo "Request 2"
 wget -q -O- \
 	--post-data='[
@@ -49,4 +49,4 @@ wget -q -O- \
 			{},
 		]
 	},
-	]' "http://localhost:8080/ubus/$sid/session/list"
+	]' "http://localhost:8080/ubus/$sid"
