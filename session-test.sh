@@ -17,4 +17,36 @@ json_close_array
 ubus call session grant "$(json_dump)"
 
 echo "Session: $sid"
-wget -O- "http://localhost:8080/ubus/$sid/session/list"
+echo "Request 1"
+wget -q -O- \
+	--post-data='{
+		"jsonrpc": "2.0",
+		"method" : "call",
+		"params" : [
+			"session",
+			"test",
+			{},
+		]
+	}' "http://localhost:8080/ubus/$sid/session/list"
+echo "Request 2"
+wget -q -O- \
+	--post-data='[
+	{
+		"jsonrpc": "2.0",
+		"method" : "call",
+		"params" : [
+			"session",
+			"list",
+			{},
+		]
+	},
+	{
+		"jsonrpc": "2.0",
+		"method" : "call",
+		"params" : [
+			"session",
+			"test",
+			{},
+		]
+	},
+	]' "http://localhost:8080/ubus/$sid/session/list"

@@ -160,13 +160,21 @@ struct dispatch_handler {
 #ifdef HAVE_UBUS
 struct dispatch_ubus {
 	struct ubus_request req;
+
+	struct uloop_timeout timeout;
 	struct json_tokener *jstok;
 	struct json_object *jsobj;
-	uint32_t obj;
+	struct json_object *jsobj_cur;
 	int post_len;
+
+	const char *sid;
+	uint32_t obj;
 	const char *func;
+
+	struct blob_buf buf;
 	bool req_pending;
-	bool header_sent;
+	bool array;
+	int array_idx;
 };
 #endif
 
