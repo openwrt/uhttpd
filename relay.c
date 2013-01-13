@@ -156,6 +156,7 @@ static void relay_proc_cb(struct uloop_process *proc, int ret)
 {
 	struct relay *r = container_of(proc, struct relay, proc);
 
+	ustream_poll(&r->sfd.stream);
 	r->process_done = true;
 	r->ret = ret;
 	relay_close_if_done(r);
