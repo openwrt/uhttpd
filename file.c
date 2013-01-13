@@ -179,6 +179,10 @@ uh_path_lookup(struct client *cl, const char *url)
 		if (!exists)
 			continue;
 
+		/* test current path */
+		if (stat(path_phys, &p.stat))
+			continue;
+
 		snprintf(path_info, sizeof(path_info), "%s", uh_buf + i);
 		break;
 	}
@@ -187,10 +191,6 @@ uh_path_lookup(struct client *cl, const char *url)
 	if (strncmp(path_phys, docroot, docroot_len) != 0 ||
 	    (path_phys[docroot_len] != 0 &&
 	     path_phys[docroot_len] != '/'))
-		return NULL;
-
-	/* test current path */
-	if (stat(path_phys, &p.stat))
 		return NULL;
 
 	/* is a regular file */
