@@ -145,6 +145,7 @@ static int usage(const char *name)
 		"	-i .ext=path    Use interpreter at path for files with the given extension\n"
 		"	-t seconds      CGI, Lua and UBUS script timeout in seconds, default is 60\n"
 		"	-T seconds      Network timeout in seconds, default is 30\n"
+		"	-k seconds		HTTP keepalive timeout\n"
 		"	-d string       URL decode given string\n"
 		"	-r string       Specify basic auth realm\n"
 		"	-m string       MD5 crypt given string\n"
@@ -200,7 +201,7 @@ int main(int argc, char **argv)
 	init_defaults();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "fSDRC:K:E:I:p:s:h:c:l:L:d:r:m:n:x:i:t:T:A:u:U:")) != -1) {
+	while ((ch = getopt(argc, argv, "fSDRC:K:E:I:p:s:h:c:l:L:d:r:m:n:x:i:t:k:T:A:u:U:")) != -1) {
 		bool tls = false;
 
 		switch(ch) {
@@ -278,6 +279,10 @@ int main(int argc, char **argv)
 
 		case 'T':
 			conf.network_timeout = atoi(optarg);
+			break;
+
+		case 'k':
+			conf.http_keepalive = atoi(optarg);
 			break;
 
 		case 'A':
