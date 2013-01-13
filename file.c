@@ -686,10 +686,12 @@ static bool __handle_file_request(struct client *cl, char *url)
 
 void uh_handle_request(struct client *cl)
 {
+	struct http_request *req = &cl->request;
 	struct dispatch_handler *d;
 	char *url = blobmsg_data(blob_data(cl->hdr.head));;
 	char *error_handler;
 
+	req->redirect_status = 200;
 	d = dispatch_find(url, NULL);
 	if (d) {
 		d->handle_request(cl, url, NULL);
@@ -699,6 +701,7 @@ void uh_handle_request(struct client *cl)
 	if (__handle_file_request(cl, url))
 		return;
 
+	req->redirect_status = 404;
 	if (conf.error_handler) {
 		error_handler = alloca(strlen(conf.error_handler) + 1);
 		strcpy(error_handler, conf.error_handler);
