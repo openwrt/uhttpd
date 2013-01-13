@@ -32,6 +32,7 @@ static const struct uhttpd_ops ops = {
 	.client_error = uh_client_error,
 	.request_done = uh_request_done,
 	.chunk_write = uh_chunk_write,
+	.chunk_printf = uh_chunk_printf,
 	.urlencode = uh_urlencode,
 	.urldecode = uh_urldecode,
 };

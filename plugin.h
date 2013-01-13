@@ -31,6 +31,7 @@ struct uhttpd_ops {
 	void (*client_error)(struct client *cl, int code, const char *summary, const char *fmt, ...);
 	void (*request_done)(struct client *cl);
 	void (*chunk_write)(struct client *cl, const void *data, int len);
+	void (*chunk_printf)(struct client *cl, const char *format, ...);
 
 	int (*urlencode)(char *buf, int blen, const char *src, int slen);
 	int (*urldecode)(char *buf, int blen, const char *src, int slen);
