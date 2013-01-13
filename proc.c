@@ -22,18 +22,18 @@
 #include "uhttpd.h"
 
 #define __headers \
-	__header(accept) \
-	__header(accept_charset) \
-	__header(accept_encoding) \
-	__header(accept_language) \
-	__header(authorization) \
-	__header(connection) \
-	__header(cookie) \
-	__header(host) \
-	__header(referer) \
-	__header(user_agent) \
-	__header(content_type) \
-	__header(content_length)
+	__header(accept, accept) \
+	__header(accept_charset, accept-charset) \
+	__header(accept_encoding, accept-encoding) \
+	__header(accept_language, accept-language) \
+	__header(authorization, authorization) \
+	__header(connection, connection) \
+	__header(cookie, cookie) \
+	__header(host, host) \
+	__header(referer, referer) \
+	__header(user_agent, user-agent) \
+	__header(content_type, content-type) \
+	__header(content_length, content-length)
 
 #undef __header
 #define __header __enum_header

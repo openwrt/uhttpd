@@ -41,8 +41,8 @@
 
 #define UH_LIMIT_CLIENTS	64
 
-#define __enum_header(_name) HDR_##_name,
-#define __blobmsg_header(_name) [HDR_##_name] = { .name = #_name, .type = BLOBMSG_TYPE_STRING },
+#define __enum_header(_name, _val) HDR_##_name,
+#define __blobmsg_header(_name, _val) [HDR_##_name] = { .name = #_val, .type = BLOBMSG_TYPE_STRING },
 
 struct client;
 
