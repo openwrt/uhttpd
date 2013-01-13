@@ -147,7 +147,9 @@ struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi)
 	snprintf(redirect_status, sizeof(redirect_status),
 		 "%d", req->redirect_status);
 	inet_ntop(cl->srv_addr.family, &cl->srv_addr.in, local_addr, sizeof(local_addr));
+	snprintf(local_port, sizeof(local_port), "%d", cl->srv_addr.port);
 	inet_ntop(cl->peer_addr.family, &cl->peer_addr.in, remote_addr, sizeof(remote_addr));
+	snprintf(remote_port, sizeof(remote_port), "%d", cl->peer_addr.port);
 
 	blobmsg_parse(hdr_policy, __HDR_MAX, tb, blob_data(data), blob_len(data));
 	for (i = 0; i < ARRAY_SIZE(proc_header_env); i++) {
