@@ -699,10 +699,12 @@ void uh_handle_request(struct client *cl)
 	if (__handle_file_request(cl, url))
 		return;
 
-	error_handler = alloca(strlen(conf.error_handler) + 1);
-	strcpy(error_handler, conf.error_handler);
-	if (__handle_file_request(cl, error_handler))
-		return;
+	if (conf.error_handler) {
+		error_handler = alloca(strlen(conf.error_handler) + 1);
+		strcpy(error_handler, conf.error_handler);
+		if (__handle_file_request(cl, error_handler))
+			return;
+	}
 
 	uh_client_error(cl, 404, "Not Found", "The requested URL %s was not found on this server.", url);
 }
