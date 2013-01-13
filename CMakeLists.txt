@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 2.6)
 
 PROJECT(uhttpd C)
+
+INCLUDE (CheckFunctionExists)
+
 SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
-ADD_DEFINITIONS(-O0 -Wall -Werror -Wmissing-declarations --std=gnu99 -g3)
+ADD_DEFINITIONS(-Os -Wall -Werror -Wmissing-declarations --std=gnu99 -g3)
 
 OPTION(TLS_SUPPORT "TLS support" ON)
 OPTION(LUA_SUPPORT "Lua support" ON)
@@ -22,6 +25,11 @@ SET(SOURCES main.c listen.c client.c utils.c file.c auth.c cgi.c relay.c proc.c 
 IF(TLS_SUPPORT)
 	SET(SOURCES ${SOURCES} tls.c)
 	ADD_DEFINITIONS(-DHAVE_TLS)
+ENDIF()
+
+CHECK_FUNCTION_EXISTS(getspnam HAVE_SHADOW)
+IF(HAVE_SHADOW)
+    ADD_DEFINITIONS(-DHAVE_SHADOW)
 ENDIF()
 
 ADD_EXECUTABLE(uhttpd ${SOURCES})
