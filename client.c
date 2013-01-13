@@ -469,7 +469,7 @@ bool uh_accept_client(int fd, bool tls)
 
 	set_addr(&cl->peer_addr, &addr);
 	sl = sizeof(addr);
-	getsockname(fd, (struct sockaddr *) &addr, &sl);
+	getsockname(sfd, (struct sockaddr *) &addr, &sl);
 	set_addr(&cl->srv_addr, &addr);
 
 	cl->us = &cl->sfd.stream;
