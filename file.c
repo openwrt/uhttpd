@@ -222,6 +222,7 @@ uh_path_lookup(struct client *cl, const char *url)
 	   url with trailing slash appended */
 	if (!slash) {
 		uh_http_header(cl, 302, "Found");
+		ustream_printf(cl->us, "Content-Length: 0\r\n");
 		ustream_printf(cl->us, "Location: %s%s%s\r\n\r\n",
 				&path_phys[docroot_len],
 				p.query ? "?" : "",
@@ -556,6 +557,8 @@ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
 		!uh_file_if_range(cl, &pi->stat) ||
 		!uh_file_if_unmodified_since(cl, &pi->stat) ||
 		!uh_file_if_none_match(cl, &pi->stat)) {
+		ustream_printf(cl->us, "Content-Length: 0\r\n");
+		ustream_printf(cl->us, "\r\n");
 		uh_request_done(cl);
 		close(fd);
 		return;
