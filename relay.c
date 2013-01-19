@@ -130,6 +130,9 @@ static void relay_read_cb(struct ustream *s, int bytes)
 	}
 
 	buf = ustream_get_read_buf(s, &len);
+	if (!buf || !len)
+		return;
+
 	uh_chunk_write(cl, buf, len);
 	ustream_consume(s, len);
 }
