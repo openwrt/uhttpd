@@ -274,9 +274,9 @@ static const char * uh_file_mime_lookup(const char *path)
 	return "application/octet-stream";
 }
 
-static const char * uh_file_mktag(struct stat *s, char *buf)
+static const char * uh_file_mktag(struct stat *s, char *buf, int len)
 {
-	snprintf(buf, sizeof(buf), "\"%x-%x-%x\"",
+	snprintf(buf, len, "\"%x-%x-%x\"",
 			 (unsigned int) s->st_ino,
 			 (unsigned int) s->st_size,
 			 (unsigned int) s->st_mtime);
@@ -318,7 +318,7 @@ static void uh_file_response_ok_hdrs(struct client *cl, struct stat *s)
 	char buf[128];
 
 	if (s) {
-		ustream_printf(cl->us, "ETag: %s\r\n", uh_file_mktag(s, buf));
+		ustream_printf(cl->us, "ETag: %s\r\n", uh_file_mktag(s, buf, sizeof(buf)));
 		ustream_printf(cl->us, "Last-Modified: %s\r\n",
 			       uh_file_unix2date(s->st_mtime, buf, sizeof(buf)));
 	}
@@ -347,7 +347,7 @@ static void uh_file_response_412(struct client *cl)
 static bool uh_file_if_match(struct client *cl, struct stat *s)
 {
 	char buf[128];
-	const char *tag = uh_file_mktag(s, buf);
+	const char *tag = uh_file_mktag(s, buf, sizeof(buf));
 	char *hdr = uh_file_header(cl, HDR_IF_MATCH);
 	char *p;
 	int i;
@@ -388,7 +388,7 @@ static int uh_file_if_modified_since(struct client *cl, struct stat *s)
 static int uh_file_if_none_match(struct client *cl, struct stat *s)
 {
 	char buf[128];
-	const char *tag = uh_file_mktag(s, buf);
+	const char *tag = uh_file_mktag(s, buf, sizeof(buf));
 	char *hdr = uh_file_header(cl, HDR_IF_NONE_MATCH);
 	char *p;
 	int i;
