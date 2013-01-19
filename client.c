@@ -193,6 +193,9 @@ static bool client_init_cb(struct client *cl, char *buf, int len)
 	if (!newline)
 		return false;
 
+	if (newline == buf)
+		return true;
+
 	*newline = 0;
 	blob_buf_init(&cl->hdr, 0);
 	cl->state = client_parse_request(cl, buf);
