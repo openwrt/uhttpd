@@ -222,6 +222,7 @@ struct client {
 	struct ustream_ssl ssl;
 #endif
 	struct uloop_timeout timeout;
+	int requests;
 
 	enum client_state state;
 	bool tls;

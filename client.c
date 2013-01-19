@@ -92,9 +92,16 @@ static void uh_set_client_timeout(struct client *cl, int timeout)
 static void uh_keepalive_poll_cb(struct uloop_timeout *timeout)
 {
 	struct client *cl = container_of(timeout, struct client, timeout);
+	int sec = cl->requests > 0 ? conf.http_keepalive : conf.network_timeout;
 
-	uh_set_client_timeout(cl, conf.http_keepalive);
+	uh_set_client_timeout(cl, sec);
 	cl->us->notify_read(cl->us, 0);
+}
+
+static void uh_poll_connection(struct client *cl)
+{
+	cl->timeout.cb = uh_keepalive_poll_cb;
+	uloop_timeout_set(&cl->timeout, 1);
 }
 
 void uh_request_done(struct client *cl)
@@ -108,8 +115,8 @@ void uh_request_done(struct client *cl)
 		return uh_connection_close(cl);
 
 	cl->state = CLIENT_STATE_INIT;
-	cl->timeout.cb = uh_keepalive_poll_cb;
-	uloop_timeout_set(&cl->timeout, 1);
+	cl->requests++;
+	uh_poll_connection(cl);
 }
 
 void __printf(4, 5)
@@ -550,7 +557,7 @@ bool uh_accept_client(int fd, bool tls)
 	cl->us->string_data = true;
 	ustream_fd_init(&cl->sfd, sfd);
 
-	uh_set_client_timeout(cl, conf.network_timeout);
+	uh_poll_connection(cl);
 	list_add_tail(&cl->list, &clients);
 
 	next_client = NULL;
