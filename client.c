@@ -75,6 +75,28 @@ static void uh_dispatch_done(struct client *cl)
 		cl->dispatch.free(cl);
 }
 
+static void client_timeout(struct uloop_timeout *timeout)
+{
+	struct client *cl = container_of(timeout, struct client, timeout);
+
+	cl->state = CLIENT_STATE_CLOSE;
+	uh_connection_close(cl);
+}
+
+static void uh_set_client_timeout(struct client *cl, int timeout)
+{
+	cl->timeout.cb = client_timeout;
+	uloop_timeout_set(&cl->timeout, timeout * 1000);
+}
+
+static void uh_keepalive_poll_cb(struct uloop_timeout *timeout)
+{
+	struct client *cl = container_of(timeout, struct client, timeout);
+
+	uh_set_client_timeout(cl, conf.http_keepalive);
+	cl->us->notify_read(cl->us, 0);
+}
+
 void uh_request_done(struct client *cl)
 {
 	uh_chunk_eof(cl);
@@ -86,7 +108,8 @@ void uh_request_done(struct client *cl)
 		return uh_connection_close(cl);
 
 	cl->state = CLIENT_STATE_INIT;
-	uloop_timeout_set(&cl->timeout, conf.http_keepalive * 1000);
+	cl->timeout.cb = uh_keepalive_poll_cb;
+	uloop_timeout_set(&cl->timeout, 1);
 }
 
 void __printf(4, 5)
@@ -111,14 +134,6 @@ uh_client_error(struct client *cl, int code, const char *summary, const char *fm
 static void uh_header_error(struct client *cl, int code, const char *summary)
 {
 	uh_client_error(cl, code, summary, NULL);
-	uh_connection_close(cl);
-}
-
-static void client_timeout(struct uloop_timeout *timeout)
-{
-	struct client *cl = container_of(timeout, struct client, timeout);
-
-	cl->state = CLIENT_STATE_CLOSE;
 	uh_connection_close(cl);
 }
 
@@ -535,9 +550,7 @@ bool uh_accept_client(int fd, bool tls)
 	cl->us->string_data = true;
 	ustream_fd_init(&cl->sfd, sfd);
 
-	cl->timeout.cb = client_timeout;
-	uloop_timeout_set(&cl->timeout, conf.network_timeout * 1000);
-
+	uh_set_client_timeout(cl, conf.network_timeout);
 	list_add_tail(&cl->list, &clients);
 
 	next_client = NULL;
