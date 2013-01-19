@@ -486,14 +486,14 @@ void uh_client_notify_state(struct client *cl)
 
 static void client_ustream_read_cb(struct ustream *s, int bytes)
 {
-	struct client *cl = container_of(s, struct client, sfd);
+	struct client *cl = container_of(s, struct client, sfd.stream);
 
 	uh_client_read_cb(cl);
 }
 
 static void client_ustream_write_cb(struct ustream *s, int bytes)
 {
-	struct client *cl = container_of(s, struct client, sfd);
+	struct client *cl = container_of(s, struct client, sfd.stream);
 
 	if (cl->dispatch.write_cb)
 		cl->dispatch.write_cb(cl);
@@ -501,7 +501,7 @@ static void client_ustream_write_cb(struct ustream *s, int bytes)
 
 static void client_notify_state(struct ustream *s)
 {
-	struct client *cl = container_of(s, struct client, sfd);
+	struct client *cl = container_of(s, struct client, sfd.stream);
 
 	uh_client_notify_state(cl);
 }
