@@ -52,7 +52,7 @@ static void uh_block_listener(struct listener *l)
 	l->blocked = true;
 }
 
-void uh_unblock_listeners(void)
+static void uh_poll_listeners(struct uloop_timeout *timeout)
 {
 	struct listener *l;
 
@@ -72,6 +72,15 @@ void uh_unblock_listeners(void)
 		l->blocked = false;
 		uloop_fd_add(&l->fd, ULOOP_READ);
 	}
+}
+
+void uh_unblock_listeners(void)
+{
+	static struct uloop_timeout poll_timer = {
+		.cb = uh_poll_listeners
+	};
+
+	uloop_timeout_set(&poll_timer, 1);
 }
 
 static void listener_cb(struct uloop_fd *fd, unsigned int events)
