@@ -132,7 +132,8 @@ static int usage(const char *name)
 		"	-S              Do not follow symbolic links outside of the docroot\n"
 		"	-D              Do not allow directory listings, send 403 instead\n"
 		"	-R              Enable RFC1918 filter\n"
-		"	-n count        Maximum allowed number of concurrent requests\n"
+		"	-n count        Maximum allowed number of concurrent script requests\n"
+		"	-N count        Maximum allowed number of concurrent connections\n"
 #ifdef HAVE_LUA
 		"	-l string       URL prefix for Lua handler, default is '/lua'\n"
 		"	-L file         Lua handler script, omit to disable Lua\n"
@@ -159,7 +160,8 @@ static void init_defaults(void)
 	conf.script_timeout = 60;
 	conf.network_timeout = 30;
 	conf.http_keepalive = 20;
-	conf.max_requests = 3;
+	conf.max_script_requests = 3;
+	conf.max_connections = 100;
 	conf.realm = "Protected Area";
 	conf.cgi_prefix = "/cgi-bin";
 	conf.cgi_path = "/sbin:/usr/sbin:/bin:/usr/bin";
@@ -201,7 +203,7 @@ int main(int argc, char **argv)
 	init_defaults();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "fSDRC:K:E:I:p:s:h:c:l:L:d:r:m:n:x:i:t:k:T:A:u:U:")) != -1) {
+	while ((ch = getopt(argc, argv, "fSDRC:K:E:I:p:s:h:c:l:L:d:r:m:n:N:x:i:t:k:T:A:u:U:")) != -1) {
 		bool tls = false;
 
 		switch(ch) {
@@ -253,7 +255,11 @@ int main(int argc, char **argv)
 			break;
 
 		case 'n':
-			conf.max_requests = atoi(optarg);
+			conf.max_script_requests = atoi(optarg);
+			break;
+
+		case 'N':
+			conf.max_connections = atoi(optarg);
 			break;
 
 		case 'x':

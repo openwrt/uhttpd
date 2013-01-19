@@ -107,6 +107,7 @@ static bool check_cgi_path(struct path_info *pi, const char *url)
 }
 
 struct dispatch_handler cgi_dispatch = {
+	.script = true,
 	.check_path = check_cgi_path,
 	.handle_request = cgi_handle_request,
 };

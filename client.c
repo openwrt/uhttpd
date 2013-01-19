@@ -73,6 +73,8 @@ static void uh_dispatch_done(struct client *cl)
 {
 	if (cl->dispatch.free)
 		cl->dispatch.free(cl);
+	if (cl->dispatch.req_free)
+		cl->dispatch.req_free(cl);
 }
 
 static void client_timeout(struct uloop_timeout *timeout)

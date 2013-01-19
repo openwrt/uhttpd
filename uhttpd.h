@@ -62,7 +62,8 @@ struct config {
 	int network_timeout;
 	int rfc1918_filter;
 	int tcp_keepalive;
-	int max_requests;
+	int max_script_requests;
+	int max_connections;
 	int http_keepalive;
 	int script_timeout;
 };
@@ -165,6 +166,7 @@ struct dispatch_proc {
 
 struct dispatch_handler {
 	struct list_head list;
+	bool script;
 
 	bool (*check_url)(const char *url);
 	bool (*check_path)(struct path_info *pi, const char *url);
@@ -198,6 +200,10 @@ struct dispatch {
 	void (*write_cb)(struct client *cl);
 	void (*close_fds)(struct client *cl);
 	void (*free)(struct client *cl);
+
+	void *req_data;
+	void (*req_free)(struct client *cl);
+
 	bool data_blocked;
 
 	union {

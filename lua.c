@@ -280,6 +280,7 @@ static bool check_lua_url(const char *url)
 }
 
 static struct dispatch_handler lua_dispatch = {
+	.script = true,
 	.check_url = check_lua_url,
 	.handle_request = lua_handle_request,
 };

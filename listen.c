@@ -56,8 +56,8 @@ static void uh_poll_listeners(struct uloop_timeout *timeout)
 {
 	struct listener *l;
 
-	if ((!n_blocked && conf.max_requests) ||
-	    n_clients >= conf.max_requests)
+	if ((!n_blocked && conf.max_connections) ||
+	    n_clients >= conf.max_connections)
 		return;
 
 	list_for_each_entry(l, &listeners, list) {
@@ -65,7 +65,7 @@ static void uh_poll_listeners(struct uloop_timeout *timeout)
 			continue;
 
 		l->fd.cb(&l->fd, ULOOP_READ);
-	    if (n_clients >= conf.max_requests)
+	    if (n_clients >= conf.max_connections)
 			break;
 
 		n_blocked--;
@@ -92,7 +92,7 @@ static void listener_cb(struct uloop_fd *fd, unsigned int events)
 			break;
 	}
 
-	if (conf.max_requests && n_clients >= conf.max_requests)
+	if (conf.max_connections && n_clients >= conf.max_connections)
 		uh_block_listener(l);
 }
 
