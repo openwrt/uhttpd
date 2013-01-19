@@ -214,9 +214,11 @@ static void proc_handle_header(struct relay *r, const char *name, const char *va
 static void proc_handle_header_end(struct relay *r)
 {
 	struct client *cl = r->cl;
+	struct dispatch_proc *p = &cl->dispatch.proc;
 	struct blob_attr *cur;
 	int rem;
 
+	uloop_timeout_cancel(&p->timeout);
 	uh_http_header(cl, cl->dispatch.proc.status_code, cl->dispatch.proc.status_msg);
 	blob_for_each_attr(cur, cl->dispatch.proc.hdr.head, rem)
 		ustream_printf(cl->us, "%s: %s\r\n", blobmsg_name(cur), blobmsg_data(cur));
@@ -239,6 +241,8 @@ static void proc_write_close(struct client *cl)
 static void proc_free(struct client *cl)
 {
 	struct dispatch_proc *p = &cl->dispatch.proc;
+
+	uloop_timeout_cancel(&p->timeout);
 	blob_buf_free(&p->hdr);
 	proc_write_close(cl);
 	uh_relay_free(&p->r);
@@ -298,6 +302,14 @@ static int proc_data_send(struct client *cl, const char *data, int len)
 	return retlen;
 }
 
+static void proc_timeout_cb(struct uloop_timeout *timeout)
+{
+	struct dispatch_proc *proc = container_of(timeout, struct dispatch_proc, timeout);
+	struct client *cl = container_of(proc, struct client, dispatch.proc);
+
+	uh_relay_kill(cl, &proc->r);
+}
+
 bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
 		       void (*cb)(struct client *cl, struct path_info *pi, char *url))
 {
@@ -352,6 +364,9 @@ bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
 	proc->r.header_end = proc_handle_header_end;
 	proc->r.close = proc_handle_close;
 	proc->wrfd.cb = proc_write_cb;
+	proc->timeout.cb = proc_timeout_cb;
+	if (conf.script_timeout > 0)
+		uloop_timeout_set(&proc->timeout, conf.script_timeout * 1000);
 
 	return true;
 

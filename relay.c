@@ -162,6 +162,15 @@ static void relay_proc_cb(struct uloop_process *proc, int ret)
 	relay_close_if_done(r);
 }
 
+void uh_relay_kill(struct client *cl, struct relay *r)
+{
+	struct ustream *us = &r->sfd.stream;
+
+	kill(r->proc.pid, SIGKILL);
+	us->eof = true;
+	ustream_state_change(us);
+}
+
 void uh_relay_open(struct client *cl, struct relay *r, int fd, int pid)
 {
 	struct ustream *us = &r->sfd.stream;
