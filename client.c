@@ -42,20 +42,24 @@ const char * const http_methods[] = {
 
 void uh_http_header(struct client *cl, int code, const char *summary)
 {
+	struct http_request *r = &cl->request;
 	const char *enc = "Transfer-Encoding: chunked\r\n";
 	const char *conn;
 
 	if (!uh_use_chunked(cl))
 		enc = "";
 
-	if (cl->request.version != UH_HTTP_VER_1_1)
+	if (r->connection_close)
 		conn = "Connection: close";
 	else
-		conn = "Connection: keep-alive";
+		conn = "Connection: Keep-Alive";
 
 	ustream_printf(cl->us, "%s %03i %s\r\n%s\r\n%s",
 		http_versions[cl->request.version],
 		code, summary, conn, enc);
+
+	if (!r->connection_close)
+		ustream_printf(cl->us, "Keep-Alive: timeout=%d\r\n", conf.http_keepalive);
 }
 
 static void uh_connection_close(struct client *cl)
@@ -78,10 +82,8 @@ void uh_request_done(struct client *cl)
 	cl->us->notify_write = NULL;
 	memset(&cl->dispatch, 0, sizeof(cl->dispatch));
 
-	if (cl->request.version != UH_HTTP_VER_1_1 || !conf.http_keepalive) {
-		uh_connection_close(cl);
-		return;
-	}
+	if (!conf.http_keepalive || cl->request.connection_close)
+		return uh_connection_close(cl);
 
 	cl->state = CLIENT_STATE_INIT;
 	uloop_timeout_set(&cl->timeout, conf.http_keepalive * 1000);
@@ -155,6 +157,8 @@ static int client_parse_request(struct client *cl, char *data)
 
 	req->method = h_method;
 	req->version = h_version;
+	if (req->version < UH_HTTP_VER_1_1 || !conf.http_keepalive)
+		req->connection_close = true;
 
 	return CLIENT_STATE_HEADER;
 }
@@ -193,11 +197,26 @@ static bool rfc1918_filter_check(struct client *cl)
 
 static void client_header_complete(struct client *cl)
 {
+	struct http_request *r = &cl->request;
+
 	if (!rfc1918_filter_check(cl))
 		return;
 
-	if (cl->request.expect_cont)
+	if (r->expect_cont)
 		ustream_printf(cl->us, "HTTP/1.1 100 Continue\r\n\r\n");
+
+	switch(r->ua) {
+	case UH_UA_MSIE_OLD:
+		if (r->method != UH_HTTP_MSG_POST)
+			break;
+
+		/* fall through */
+	case UH_UA_SAFARI:
+		r->connection_close = true;
+		break;
+	default:
+		break;
+	}
 
 	uh_handle_request(cl);
 }
@@ -242,6 +261,38 @@ static void client_parse_header(struct client *cl, char *data)
 	} else if (!strcmp(data, "transfer-encoding")) {
 		if (!strcmp(val, "chunked"))
 			r->transfer_chunked = true;
+	} else if (!strcmp(data, "connection")) {
+		if (!strcasecmp(val, "close"))
+			r->connection_close = true;
+		else if (!strcasecmp(val, "keep-alive"))
+			r->connection_close = false;
+	} else if (!strcmp(data, "user-agent")) {
+		char *str;
+
+		if (strstr(val, "Opera"))
+			r->ua = UH_UA_OPERA;
+		else if ((str = strstr(val, "MSIE ")) != NULL) {
+			r->ua = UH_UA_MSIE_NEW;
+			if (str[5] && str[6] == '.') {
+				switch (str[5]) {
+				case '6':
+					if (strstr(str, "SV1"))
+						break;
+					/* fall through */
+				case '5':
+				case '4':
+					r->ua = UH_UA_MSIE_OLD;
+					break;
+				}
+			}
+		} else if (strstr(val, "Safari/") && strstr(val, "Mac OS X"))
+			r->ua = UH_UA_SAFARI;
+		else if (strstr(val, "Chrome/"))
+			r->ua = UH_UA_CHROME;
+		else if (strstr(val, "Gecko/"))
+			r->ua = UH_UA_GECKO;
+		else if (strstr(val, "Konqueror"))
+			r->ua = UH_UA_KONQUEROR;
 	}
 
 
