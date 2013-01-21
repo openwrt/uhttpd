@@ -118,7 +118,9 @@ bool uh_auth_check(struct client *cl, struct path_info *pi)
 	if (!req->realm)
 		return true;
 
-	if (user_match && !strcmp(crypt(pass, realm->pass), realm->pass))
+	if (user_match &&
+	    (!strcmp(pass, realm->pass) ||
+	     !strcmp(crypt(pass, realm->pass), realm->pass)))
 		return true;
 
 	uh_http_header(cl, 401, "Authorization Required");
