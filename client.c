@@ -110,7 +110,6 @@ void uh_request_done(struct client *cl)
 {
 	uh_chunk_eof(cl);
 	uh_dispatch_done(cl);
-	cl->us->notify_write = NULL;
 	memset(&cl->dispatch, 0, sizeof(cl->dispatch));
 
 	if (!conf.http_keepalive || cl->request.connection_close)
