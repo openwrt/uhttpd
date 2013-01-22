@@ -144,6 +144,7 @@ uh_ubus_session_dump(struct uh_ubus_session *ses,
 
 	blobmsg_add_string(&buf, "sid", ses->id);
 	blobmsg_add_u32(&buf, "timeout", ses->timeout);
+	blobmsg_add_u32(&buf, "expires", uloop_timeout_pending(&ses->t) / 1000);
 
 	c = blobmsg_open_table(&buf, "acls");
 	uh_ubus_session_dump_acls(ses, &buf);
