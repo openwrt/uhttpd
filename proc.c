@@ -263,6 +263,7 @@ static void proc_relay_write_cb(struct client *cl)
 		return;
 
 	ustream_set_read_blocked(&p->r.sfd.stream, false);
+	p->r.sfd.stream.notify_read(&p->r.sfd.stream, 0);
 }
 
 static int proc_data_send(struct client *cl, const char *data, int len)
