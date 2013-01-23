@@ -189,13 +189,16 @@ static void fixup_prefix(char *str)
 
 int main(int argc, char **argv)
 {
-	const char *tls_key = NULL, *tls_crt = NULL;
 	bool nofork = false;
 	char *port;
 	int opt, ch;
 	int cur_fd;
 	int bound = 0;
+
+#ifdef HAVE_TLS
 	int n_tls = 0;
+	const char *tls_key = NULL, *tls_crt = NULL;
+#endif
 
 	BUILD_BUG_ON(sizeof(uh_buf) < PATH_MAX);
 
@@ -204,15 +207,29 @@ int main(int argc, char **argv)
 	signal(SIGPIPE, SIG_IGN);
 
 	while ((ch = getopt(argc, argv, "fSDRC:K:E:I:p:s:h:c:l:L:d:r:m:n:N:x:i:t:k:T:A:u:U:")) != -1) {
-		bool tls = false;
-
 		switch(ch) {
+#ifdef HAVE_TLS
+		case 'C':
+			tls_crt = optarg;
+			break;
+
+		case 'K':
+			tls_key = optarg;
+			break;
+
 		case 's':
 			n_tls++;
-			tls = true;
 			/* fall through */
+#else
+		case 'C':
+		case 'K':
+		case 's':
+			fprintf(stderr, "uhttpd: TLS support not compiled, "
+			                "ignoring -%c\n", opt);
+			break;
+#endif
 		case 'p':
-			bound += add_listener_arg(optarg, tls);
+			bound += add_listener_arg(optarg, (ch == 's'));
 			break;
 
 		case 'h':
@@ -334,13 +351,6 @@ int main(int argc, char **argv)
 			conf.file = optarg;
 			break;
 
-		case 'C':
-			tls_crt = optarg;
-			break;
-
-		case 'K':
-			tls_key = optarg;
-			break;
 #ifdef HAVE_LUA
 		case 'l':
 			conf.lua_prefix = optarg;
@@ -348,6 +358,12 @@ int main(int argc, char **argv)
 
 		case 'L':
 			conf.lua_handler = optarg;
+			break;
+#else
+		case 'l':
+		case 'L':
+			fprintf(stderr, "uhttpd: Lua support not compiled, "
+			                "ignoring -%c\n", opt);
 			break;
 #endif
 #ifdef HAVE_UBUS
@@ -357,6 +373,12 @@ int main(int argc, char **argv)
 
 		case 'U':
 			conf.ubus_socket = optarg;
+			break;
+#else
+		case 'u':
+		case 'U':
+			fprintf(stderr, "uhttpd: UBUS support not compiled, "
+			                "ignoring -%c\n", opt);
 			break;
 #endif
 		default:
@@ -371,6 +393,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+#ifdef HAVE_TLS
 	if (n_tls) {
 		if (!tls_crt || !tls_key) {
 			fprintf(stderr, "Please specify a certificate and "
@@ -378,14 +401,10 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
-#ifdef HAVE_TLS
 		if (uh_tls_init(tls_key, tls_crt))
 		    return 1;
-#else
-		fprintf(stderr, "Error: TLS support not compiled in.\n");
-		return 1;
-#endif
 	}
+#endif
 
 #ifdef HAVE_LUA
 	if (conf.lua_handler || conf.lua_prefix) {
