@@ -233,15 +233,21 @@ static void uh_ubus_single_error(struct client *cl, enum rpc_error type)
 	ops->request_done(cl);
 }
 
-static void uh_ubus_send_request(struct client *cl, json_object *obj)
+static void uh_ubus_send_request(struct client *cl, json_object *obj, struct blob_attr *args)
 {
 	struct dispatch *d = &cl->dispatch;
 	struct dispatch_ubus *du = &d->ubus;
-	int ret;
+	struct blob_attr *cur;
+	static struct blob_buf req;
+	int ret, rem;
+
+	blob_buf_init(&req, 0);
+	blobmsg_for_each_attr(cur, args, rem)
+		blobmsg_add_blob(&req, cur);
 
 	blob_buf_init(&du->buf, 0);
 	memset(&du->req, 0, sizeof(du->req));
-	ret = ubus_invoke_async(ctx, du->obj, du->func, buf.head, &du->req);
+	ret = ubus_invoke_async(ctx, du->obj, du->func, req.head, &du->req);
 	if (ret)
 		return uh_ubus_json_error(cl, ERROR_INTERNAL);
 
@@ -376,7 +382,7 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 		goto error;
 	}
 
-	uh_ubus_send_request(cl, obj);
+	uh_ubus_send_request(cl, obj, data.data);
 	return;
 
 error:
