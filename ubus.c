@@ -26,7 +26,6 @@
 
 #include "uhttpd.h"
 #include "plugin.h"
-#include "ubus-session.h"
 
 static const struct uhttpd_ops *ops;
 static struct config *_conf;
@@ -50,6 +49,15 @@ static const struct blobmsg_policy rpc_policy[__RPC_MAX] = {
 	[RPC_METHOD] = { .name = "method", .type = BLOBMSG_TYPE_STRING },
 	[RPC_PARAMS] = { .name = "params", .type = BLOBMSG_TYPE_ARRAY },
 	[RPC_ID] = { .name = "id", .type = BLOBMSG_TYPE_UNSPEC },
+};
+
+enum {
+	SES_ACCESS,
+	__SES_MAX,
+};
+
+static const struct blobmsg_policy ses_policy[__SES_MAX] = {
+	[SES_ACCESS] = { .name = "access", .type = BLOBMSG_TYPE_BOOL },
 };
 
 struct rpc_data {
@@ -302,10 +310,42 @@ static void uh_ubus_complete_batch(struct client *cl)
 	ops->request_done(cl);
 }
 
+static void uh_ubus_allowed_cb(struct ubus_request *req, int type, struct blob_attr *msg)
+{
+	struct blob_attr *tb[__SES_MAX];
+	bool *allow = (bool *)req->priv;
+
+	if (!msg)
+		return;
+
+	blobmsg_parse(ses_policy, __SES_MAX, tb, blob_data(msg), blob_len(msg));
+
+	if (tb[SES_ACCESS])
+		*allow = blobmsg_get_bool(tb[SES_ACCESS]);
+}
+
+static bool uh_ubus_allowed(const char *sid, const char *obj, const char *fun)
+{
+	uint32_t id;
+	bool allow = false;
+	static struct blob_buf req;
+
+	if (ubus_lookup_id(ctx, "session", &id))
+		return false;
+
+	blob_buf_init(&req, 0);
+	blobmsg_add_string(&req, "sid", sid);
+	blobmsg_add_string(&req, "object", obj);
+	blobmsg_add_string(&req, "function", fun);
+
+	ubus_invoke(ctx, id, "access", req.head, uh_ubus_allowed_cb, &allow, 250);
+
+	return allow;
+}
+
 static void uh_ubus_handle_request_object(struct client *cl, struct json_object *obj)
 {
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
-	struct uh_ubus_session *ses;
 	struct rpc_data data = {};
 	enum rpc_error err = ERROR_PARSE;
 
@@ -325,20 +365,14 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 		goto error;
 	}
 
-	ses = uh_ubus_session_get(du->sid);
-	if (!ses) {
-		err = ERROR_SESSION;
-		goto error;
-	}
-
-	if (!uh_ubus_session_acl_allowed(ses, data.object, data.function)) {
-		err = ERROR_ACCESS;
-		goto error;
-	}
-
 	du->func = data.function;
 	if (ubus_lookup_id(ctx, data.object, &du->obj)) {
 		err = ERROR_OBJECT;
+		goto error;
+	}
+
+	if (!uh_ubus_allowed(du->sid, data.object, data.function)) {
+		err = ERROR_ACCESS;
 		goto error;
 	}
 
@@ -451,10 +485,6 @@ uh_ubus_init(void)
 	}
 
 	ops->dispatch_add(&ubus_dispatch);
-	if (ubus_session_api_init(ctx)) {
-		fprintf(stderr, "Unable to initialize ubus session API\n");
-		exit(1);
-	}
 
 	uloop_done();
 	return 0;
