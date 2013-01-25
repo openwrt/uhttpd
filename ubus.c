@@ -371,7 +371,7 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 		goto error;
 	}
 
-	if (!uh_ubus_allowed(du->sid, data.object, data.function)) {
+	if (!conf.ubus_noauth && !uh_ubus_allowed(du->sid, data.object, data.function)) {
 		err = ERROR_ACCESS;
 		goto error;
 	}

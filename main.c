@@ -139,14 +139,15 @@ static int usage(const char *name)
 		"	-L file         Lua handler script, omit to disable Lua\n"
 #endif
 #ifdef HAVE_UBUS
-		"	-u string       URL prefix for HTTP/JSON handler\n"
+		"	-u string       URL prefix for UBUS via JSON-RPC handler\n"
 		"	-U file         Override ubus socket path\n"
+		"	-a              Do not authenticate JSON-RPC requests against UBUS session api\n"
 #endif
 		"	-x string       URL prefix for CGI handler, default is '/cgi-bin'\n"
 		"	-i .ext=path    Use interpreter at path for files with the given extension\n"
 		"	-t seconds      CGI, Lua and UBUS script timeout in seconds, default is 60\n"
 		"	-T seconds      Network timeout in seconds, default is 30\n"
-		"	-k seconds		HTTP keepalive timeout\n"
+		"	-k seconds      HTTP keepalive timeout\n"
 		"	-d string       URL decode given string\n"
 		"	-r string       Specify basic auth realm\n"
 		"	-m string       MD5 crypt given string\n"
@@ -206,7 +207,7 @@ int main(int argc, char **argv)
 	init_defaults();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "fSDRC:K:E:I:p:s:h:c:l:L:d:r:m:n:N:x:i:t:k:T:A:u:U:")) != -1) {
+	while ((ch = getopt(argc, argv, "afSDRC:K:E:I:p:s:h:c:l:L:d:r:m:n:N:x:i:t:k:T:A:u:U:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -367,6 +368,10 @@ int main(int argc, char **argv)
 			break;
 #endif
 #ifdef HAVE_UBUS
+		case 'a':
+			conf.ubus_noauth = 1;
+			break;
+
 		case 'u':
 			conf.ubus_prefix = optarg;
 			break;
@@ -375,6 +380,7 @@ int main(int argc, char **argv)
 			conf.ubus_socket = optarg;
 			break;
 #else
+		case 'a':
 		case 'u':
 		case 'U':
 			fprintf(stderr, "uhttpd: UBUS support not compiled, "

@@ -66,6 +66,7 @@ struct config {
 	int max_connections;
 	int http_keepalive;
 	int script_timeout;
+	int ubus_noauth;
 };
 
 struct auth_realm {
