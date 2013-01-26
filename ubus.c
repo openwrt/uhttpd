@@ -35,6 +35,7 @@ static struct ubus_context *ctx;
 static struct blob_buf buf;
 
 #define UH_UBUS_MAX_POST_SIZE	4096
+#define UH_UBUS_DEFAULT_SID	"00000000000000000000000000000000"
 
 enum {
 	RPC_JSONRPC,
@@ -449,15 +450,21 @@ static void uh_ubus_handle_request(struct client *cl, char *url, struct path_inf
 
 	blob_buf_init(&buf, 0);
 
-	url += strlen(conf.ubus_prefix);
-	while (*url == '/')
-		url++;
+	if (conf.ubus_noauth) {
+		sid = UH_UBUS_DEFAULT_SID;
+	}
+	else {
+		url += strlen(conf.ubus_prefix);
+		while (*url == '/')
+			url++;
 
-	sep = strchr(url, '/');
-	if (sep)
-		*sep = 0;
+		sep = strchr(url, '/');
+		if (sep)
+			*sep = 0;
 
-	sid = url;
+		sid = url;
+	}
+
 	if (strlen(sid) != 32 ||
 	    cl->request.method != UH_HTTP_MSG_POST)
 		return ops->client_error(cl, 400, "Bad Request", "Invalid Request");
