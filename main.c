@@ -399,6 +399,14 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	if (!conf.docroot) {
+		if (!realpath(".", uh_buf)) {
+			fprintf(stderr, "Error: Unable to determine work dir\n");
+			return 1;
+		}
+		conf.docroot = strdup(uh_buf);
+	}
+
 #ifdef HAVE_TLS
 	if (n_tls) {
 		if (!tls_crt || !tls_key) {
