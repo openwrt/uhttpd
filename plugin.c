@@ -65,5 +65,6 @@ void uh_plugin_post_init(void)
 	struct uhttpd_plugin *p;
 
 	list_for_each_entry(p, &plugins, list)
-		p->post_init();
+		if (p->post_init)
+			p->post_init();
 }
