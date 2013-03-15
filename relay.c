@@ -76,6 +76,9 @@ static void relay_process_headers(struct relay *r)
 		char *val;
 
 		buf = ustream_get_read_buf(s, &len);
+		if (!buf || !len)
+			break;
+
 		newline = strchr(buf, '\n');
 		if (!newline)
 			break;
