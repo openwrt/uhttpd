@@ -218,7 +218,8 @@ static void lua_main(struct client *cl, struct path_info *pi, char *url)
 	path_len = strlen(url);
 	str = strchr(url, '?');
 	if (str) {
-		pi->query = str;
+		if (*(str + 1))
+			pi->query = str + 1;
 		path_len = str - url;
 	}
 	if (path_len > prefix_len) {
