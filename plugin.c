@@ -43,7 +43,7 @@ int uh_plugin_init(const char *name)
 	const char *sym;
 	void *dlh;
 
-	dlh = dlopen(name, RTLD_LAZY | RTLD_LOCAL);
+	dlh = dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
 	if (!dlh) {
 		fprintf(stderr, "Could not open plugin %s: %s\n", name, dlerror());
 		return -ENOENT;
