@@ -68,14 +68,14 @@ int uh_tls_init(const char *key, const char *crt)
 
 static void tls_ustream_read_cb(struct ustream *s, int bytes)
 {
-	struct client *cl = container_of(s, struct client, ssl);
+	struct client *cl = container_of(s, struct client, ssl.stream);
 
 	uh_client_read_cb(cl);
 }
 
 static void tls_ustream_write_cb(struct ustream *s, int bytes)
 {
-	struct client *cl = container_of(s, struct client, ssl);
+	struct client *cl = container_of(s, struct client, ssl.stream);
 
 	if (cl->dispatch.write_cb)
 		cl->dispatch.write_cb(cl);
@@ -83,7 +83,7 @@ static void tls_ustream_write_cb(struct ustream *s, int bytes)
 
 static void tls_notify_state(struct ustream *s)
 {
-	struct client *cl = container_of(s, struct client, ssl);
+	struct client *cl = container_of(s, struct client, ssl.stream);
 
 	uh_client_notify_state(cl);
 }
