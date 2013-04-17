@@ -103,12 +103,21 @@ static int add_listener_arg(char *arg, bool tls)
 	char *host = NULL;
 	char *port = arg;
 	char *s;
+	int l;
 
 	s = strrchr(arg, ':');
 	if (s) {
 		host = arg;
 		port = s + 1;
 		*s = 0;
+	}
+
+	if (host && *host == '[') {
+		l = strlen(host);
+		if (l >= 2) {
+			host[l-1] = 0;
+			host++;
+		}
 	}
 
 	return uh_socket_bind(host, port, tls);
