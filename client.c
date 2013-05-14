@@ -567,6 +567,7 @@ bool uh_accept_client(int fd, bool tls)
 	next_client = NULL;
 	n_clients++;
 	cl->id = client_id++;
+	cl->tls = tls;
 
 	return true;
 }
