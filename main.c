@@ -165,7 +165,7 @@ static int usage(const char *name)
 	return 1;
 }
 
-static void init_defaults(void)
+static void init_defaults_pre(void)
 {
 	conf.script_timeout = 60;
 	conf.network_timeout = 30;
@@ -175,7 +175,10 @@ static void init_defaults(void)
 	conf.realm = "Protected Area";
 	conf.cgi_prefix = "/cgi-bin";
 	conf.cgi_path = "/sbin:/usr/sbin:/bin:/usr/bin";
+}
 
+static void init_defaults_post(void)
+{
 	uh_index_add("index.html");
 	uh_index_add("index.htm");
 	uh_index_add("default.html");
@@ -213,7 +216,7 @@ int main(int argc, char **argv)
 	BUILD_BUG_ON(sizeof(uh_buf) < PATH_MAX);
 
 	uh_dispatch_add(&cgi_dispatch);
-	init_defaults();
+	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
 	while ((ch = getopt(argc, argv, "afSDRC:K:E:I:p:s:h:c:l:L:d:r:m:n:N:x:i:t:k:T:A:u:U:")) != -1) {
@@ -402,6 +405,7 @@ int main(int argc, char **argv)
 	}
 
 	uh_config_parse();
+	init_defaults_post();
 
 	if (!bound) {
 		fprintf(stderr, "Error: No sockets bound, unable to continue\n");
