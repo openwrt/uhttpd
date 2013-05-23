@@ -194,8 +194,10 @@ static bool client_init_cb(struct client *cl, char *buf, int len)
 	if (!newline)
 		return false;
 
-	if (newline == buf)
+	if (newline == buf) {
+		ustream_consume(cl->us, 2);
 		return true;
+	}
 
 	*newline = 0;
 	blob_buf_init(&cl->hdr, 0);
