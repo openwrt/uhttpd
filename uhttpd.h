@@ -146,6 +146,7 @@ struct env_var {
 struct relay {
 	struct ustream_fd sfd;
 	struct uloop_process proc;
+	struct uloop_timeout timeout;
 	struct client *cl;
 
 	bool process_done;

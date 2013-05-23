@@ -115,6 +115,9 @@ static void relay_read_cb(struct ustream *s, int bytes)
 	char *buf;
 	int len;
 
+	if (r->process_done)
+		uloop_timeout_set(&r->timeout, 1);
+
 	relay_process_headers(r);
 
 	if (r->header_cb) {
@@ -140,11 +143,14 @@ static void relay_read_cb(struct ustream *s, int bytes)
 	ustream_consume(s, len);
 }
 
-static void relay_close_if_done(struct relay *r)
+static void relay_close_if_done(struct uloop_timeout *timeout)
 {
+	struct relay *r = container_of(timeout, struct relay, timeout);
 	struct ustream *s = &r->sfd.stream;
 
-	if (!s->eof || ustream_pending_data(s, false))
+	while (ustream_poll(&r->sfd.stream));
+
+	if (!(r->process_done || s->eof) || ustream_pending_data(s, false))
 		return;
 
 	uh_relay_close(r, r->ret);
@@ -155,17 +161,16 @@ static void relay_state_cb(struct ustream *s)
 	struct relay *r = container_of(s, struct relay, sfd.stream);
 
 	if (r->process_done)
-		relay_close_if_done(r);
+		uloop_timeout_set(&r->timeout, 1);
 }
 
 static void relay_proc_cb(struct uloop_process *proc, int ret)
 {
 	struct relay *r = container_of(proc, struct relay, proc);
 
-	ustream_poll(&r->sfd.stream);
 	r->process_done = true;
 	r->ret = ret;
-	relay_close_if_done(r);
+	uloop_timeout_set(&r->timeout, 1);
 }
 
 void uh_relay_kill(struct client *cl, struct relay *r)
@@ -190,4 +195,6 @@ void uh_relay_open(struct client *cl, struct relay *r, int fd, int pid)
 	r->proc.pid = pid;
 	r->proc.cb = relay_proc_cb;
 	uloop_process_add(&r->proc);
+
+	r->timeout.cb = relay_close_if_done;
 }
