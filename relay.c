@@ -55,6 +55,7 @@ static void relay_error(struct relay *r)
 	struct ustream *s = &r->sfd.stream;
 	int len;
 
+	r->error = true;
 	s->eof = true;
 	ustream_get_read_buf(s, &len);
 	if (len)
@@ -118,7 +119,8 @@ static void relay_read_cb(struct ustream *s, int bytes)
 	if (r->process_done)
 		uloop_timeout_set(&r->timeout, 1);
 
-	relay_process_headers(r);
+	if (!r->error)
+		relay_process_headers(r);
 
 	if (r->header_cb) {
 		/*

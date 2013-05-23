@@ -150,6 +150,7 @@ struct relay {
 	struct client *cl;
 
 	bool process_done;
+	bool error;
 	int ret;
 	int header_ofs;
 
