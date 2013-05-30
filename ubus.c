@@ -215,7 +215,7 @@ static void uh_ubus_request_free(struct client *cl)
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
 
 	blob_buf_free(&du->buf);
-	uloop_timeout_cancel(&cl->timeout);
+	uloop_timeout_cancel(&du->timeout);
 
 	if (du->jsobj)
 		json_object_put(du->jsobj);
