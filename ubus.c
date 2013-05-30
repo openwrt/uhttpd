@@ -257,7 +257,7 @@ static void uh_ubus_send_request(struct client *cl, json_object *obj, struct blo
 	ubus_complete_request_async(ctx, &du->req);
 
 	du->timeout.cb = uh_ubus_timeout_cb;
-	uloop_timeout_set(&du->timeout, conf.script_timeout);
+	uloop_timeout_set(&du->timeout, conf.script_timeout * 1000);
 
 	du->req_pending = true;
 }
