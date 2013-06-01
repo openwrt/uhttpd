@@ -28,6 +28,7 @@ void uh_relay_free(struct relay *r)
 	if (r->proc.pending)
 		kill(r->proc.pid, SIGKILL);
 
+	uloop_timeout_cancel(&r->timeout);
 	uloop_process_delete(&r->proc);
 	ustream_free(&r->sfd.stream);
 	close(r->sfd.fd.fd);
