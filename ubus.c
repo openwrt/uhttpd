@@ -67,6 +67,7 @@ struct rpc_data {
 	const char *object;
 	const char *function;
 	struct blob_attr *data;
+	struct blob_attr *params;
 };
 
 enum rpc_error {
@@ -262,6 +263,83 @@ static void uh_ubus_send_request(struct client *cl, json_object *obj, struct blo
 	du->req_pending = true;
 }
 
+static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *obj, void *priv)
+{
+	struct blob_attr *sig, *attr;
+	int rem, rem2;
+	void *t, *o;
+
+	if (!priv) {
+		blobmsg_add_string(&buf, NULL, obj->path);
+		return;
+	}
+
+	if (!obj->signature)
+		return;
+
+	o = blobmsg_open_table(&buf, obj->path);
+	blob_for_each_attr(sig, obj->signature, rem) {
+		t = blobmsg_open_table(&buf, blobmsg_name(sig));
+		rem2 = blobmsg_data_len(sig);
+		__blob_for_each_attr(attr, blobmsg_data(sig), rem2) {
+			if (blob_id(attr) != BLOBMSG_TYPE_INT32)
+				continue;
+
+			switch (blobmsg_get_u32(attr)) {
+			case BLOBMSG_TYPE_INT8:
+				blobmsg_add_string(&buf, blobmsg_name(attr), "boolean");
+				break;
+			case BLOBMSG_TYPE_INT32:
+				blobmsg_add_string(&buf, blobmsg_name(attr), "number");
+				break;
+			case BLOBMSG_TYPE_STRING:
+				blobmsg_add_string(&buf, blobmsg_name(attr), "string");
+				break;
+			case BLOBMSG_TYPE_ARRAY:
+				blobmsg_add_string(&buf, blobmsg_name(attr), "array");
+				break;
+			case BLOBMSG_TYPE_TABLE:
+				blobmsg_add_string(&buf, blobmsg_name(attr), "object");
+				break;
+			default:
+				blobmsg_add_string(&buf, blobmsg_name(attr), "unknown");
+				break;
+			}
+		}
+		blobmsg_close_table(&buf, t);
+	}
+	blobmsg_close_table(&buf, o);
+}
+
+static void uh_ubus_send_list(struct client *cl, json_object *obj, struct blob_attr *params)
+{
+	struct blob_attr *cur, *dup;
+	void *r;
+	int rem;
+
+	uh_ubus_init_response(cl);
+
+	if (!params || blob_id(params) != BLOBMSG_TYPE_ARRAY) {
+		r = blobmsg_open_array(&buf, "result");
+		ubus_lookup(ctx, NULL, uh_ubus_list_cb, NULL);
+		blobmsg_close_array(&buf, r);
+	}
+	else {
+		r = blobmsg_open_table(&buf, "result");
+		dup = blob_memdup(params);
+		if (dup)
+		{
+			rem = blobmsg_data_len(dup);
+			__blob_for_each_attr(cur, blobmsg_data(dup), rem)
+				ubus_lookup(ctx, blobmsg_data(cur), uh_ubus_list_cb, blobmsg_data(cur));
+			free(dup);
+		}
+		blobmsg_close_table(&buf, r);
+	}
+
+	uh_ubus_send_response(cl);
+}
+
 static bool parse_json_rpc(struct rpc_data *d, struct blob_attr *data)
 {
 	const struct blobmsg_policy data_policy[] = {
@@ -288,17 +366,21 @@ static bool parse_json_rpc(struct rpc_data *d, struct blob_attr *data)
 
 	cur = tb[RPC_PARAMS];
 	if (!cur)
-		return false;
+		return true;
+
+	d->params = cur;
 
 	blobmsg_parse_array(data_policy, ARRAY_SIZE(data_policy), tb2,
 			    blobmsg_data(cur), blobmsg_data_len(cur));
 
-	if (!tb2[0] || !tb2[1] || !tb2[2])
-		return false;
+	if (tb2[0])
+		d->object = blobmsg_data(tb2[0]);
 
-	d->object = blobmsg_data(tb2[0]);
-	d->function = blobmsg_data(tb2[1]);
+	if (tb2[1])
+		d->function = blobmsg_data(tb2[1]);
+
 	d->data = tb2[2];
+
 	return true;
 }
 
@@ -367,24 +449,32 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 	if (!parse_json_rpc(&data, buf.head))
 		goto error;
 
-	if (strcmp(data.method, "call") != 0) {
+	if (!strcmp(data.method, "call")) {
+		if (!data.object || !data.function || !data.data)
+			goto error;
+
+		du->func = data.function;
+		if (ubus_lookup_id(ctx, data.object, &du->obj)) {
+			err = ERROR_OBJECT;
+			goto error;
+		}
+
+		if (!conf.ubus_noauth && !uh_ubus_allowed(du->sid, data.object, data.function)) {
+			err = ERROR_ACCESS;
+			goto error;
+		}
+
+		uh_ubus_send_request(cl, obj, data.data);
+		return;
+	}
+	else if (!strcmp(data.method, "list")) {
+		uh_ubus_send_list(cl, obj, data.params);
+		return;
+	}
+	else {
 		err = ERROR_METHOD;
 		goto error;
 	}
-
-	du->func = data.function;
-	if (ubus_lookup_id(ctx, data.object, &du->obj)) {
-		err = ERROR_OBJECT;
-		goto error;
-	}
-
-	if (!conf.ubus_noauth && !uh_ubus_allowed(du->sid, data.object, data.function)) {
-		err = ERROR_ACCESS;
-		goto error;
-	}
-
-	uh_ubus_send_request(cl, obj, data.data);
-	return;
 
 error:
 	uh_ubus_json_error(cl, err);
