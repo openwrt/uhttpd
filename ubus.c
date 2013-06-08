@@ -70,6 +70,11 @@ struct rpc_data {
 	struct blob_attr *params;
 };
 
+struct list_data {
+	bool verbose;
+	struct blob_buf *buf;
+};
+
 enum rpc_error {
 	ERROR_PARSE,
 	ERROR_REQUEST,
@@ -266,20 +271,21 @@ static void uh_ubus_send_request(struct client *cl, json_object *obj, struct blo
 static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *obj, void *priv)
 {
 	struct blob_attr *sig, *attr;
+	struct list_data *data = priv;
 	int rem, rem2;
 	void *t, *o;
 
-	if (!priv) {
-		blobmsg_add_string(&buf, NULL, obj->path);
+	if (!data->verbose) {
+		blobmsg_add_string(data->buf, NULL, obj->path);
 		return;
 	}
 
 	if (!obj->signature)
 		return;
 
-	o = blobmsg_open_table(&buf, obj->path);
+	o = blobmsg_open_table(data->buf, obj->path);
 	blob_for_each_attr(sig, obj->signature, rem) {
-		t = blobmsg_open_table(&buf, blobmsg_name(sig));
+		t = blobmsg_open_table(data->buf, blobmsg_name(sig));
 		rem2 = blobmsg_data_len(sig);
 		__blob_for_each_attr(attr, blobmsg_data(sig), rem2) {
 			if (blob_id(attr) != BLOBMSG_TYPE_INT32)
@@ -287,56 +293,60 @@ static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *o
 
 			switch (blobmsg_get_u32(attr)) {
 			case BLOBMSG_TYPE_INT8:
-				blobmsg_add_string(&buf, blobmsg_name(attr), "boolean");
+				blobmsg_add_string(data->buf, blobmsg_name(attr), "boolean");
 				break;
 			case BLOBMSG_TYPE_INT32:
-				blobmsg_add_string(&buf, blobmsg_name(attr), "number");
+				blobmsg_add_string(data->buf, blobmsg_name(attr), "number");
 				break;
 			case BLOBMSG_TYPE_STRING:
-				blobmsg_add_string(&buf, blobmsg_name(attr), "string");
+				blobmsg_add_string(data->buf, blobmsg_name(attr), "string");
 				break;
 			case BLOBMSG_TYPE_ARRAY:
-				blobmsg_add_string(&buf, blobmsg_name(attr), "array");
+				blobmsg_add_string(data->buf, blobmsg_name(attr), "array");
 				break;
 			case BLOBMSG_TYPE_TABLE:
-				blobmsg_add_string(&buf, blobmsg_name(attr), "object");
+				blobmsg_add_string(data->buf, blobmsg_name(attr), "object");
 				break;
 			default:
-				blobmsg_add_string(&buf, blobmsg_name(attr), "unknown");
+				blobmsg_add_string(data->buf, blobmsg_name(attr), "unknown");
 				break;
 			}
 		}
-		blobmsg_close_table(&buf, t);
+		blobmsg_close_table(data->buf, t);
 	}
-	blobmsg_close_table(&buf, o);
+	blobmsg_close_table(data->buf, o);
 }
 
 static void uh_ubus_send_list(struct client *cl, json_object *obj, struct blob_attr *params)
 {
 	struct blob_attr *cur, *dup;
+	struct list_data data = { .buf = &cl->dispatch.ubus.buf, .verbose = false };
 	void *r;
 	int rem;
 
-	uh_ubus_init_response(cl);
+	blob_buf_init(data.buf, 0);
 
 	if (!params || blob_id(params) != BLOBMSG_TYPE_ARRAY) {
-		r = blobmsg_open_array(&buf, "result");
-		ubus_lookup(ctx, NULL, uh_ubus_list_cb, NULL);
-		blobmsg_close_array(&buf, r);
+		r = blobmsg_open_array(data.buf, "result");
+		ubus_lookup(ctx, NULL, uh_ubus_list_cb, &data);
+		blobmsg_close_array(data.buf, r);
 	}
 	else {
-		r = blobmsg_open_table(&buf, "result");
+		r = blobmsg_open_table(data.buf, "result");
 		dup = blob_memdup(params);
 		if (dup)
 		{
 			rem = blobmsg_data_len(dup);
+			data.verbose = true;
 			__blob_for_each_attr(cur, blobmsg_data(dup), rem)
-				ubus_lookup(ctx, blobmsg_data(cur), uh_ubus_list_cb, blobmsg_data(cur));
+				ubus_lookup(ctx, blobmsg_data(cur), uh_ubus_list_cb, &data);
 			free(dup);
 		}
-		blobmsg_close_table(&buf, r);
+		blobmsg_close_table(data.buf, r);
 	}
 
+	uh_ubus_init_response(cl);
+	blobmsg_add_blob(&buf, blob_data(data.buf->head));
 	uh_ubus_send_response(cl);
 }
 
