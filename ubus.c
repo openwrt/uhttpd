@@ -368,10 +368,12 @@ static bool parse_json_rpc(struct rpc_data *d, struct blob_attr *data)
 	if (!cur)
 		return true;
 
-	d->params = cur;
+	d->params = blob_memdup(cur);
+	if (!d->params)
+		return false;
 
 	blobmsg_parse_array(data_policy, ARRAY_SIZE(data_policy), tb2,
-			    blobmsg_data(cur), blobmsg_data_len(cur));
+			    blobmsg_data(d->params), blobmsg_data_len(d->params));
 
 	if (tb2[0])
 		d->object = blobmsg_data(tb2[0]);
@@ -465,11 +467,11 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 		}
 
 		uh_ubus_send_request(cl, obj, data.data);
-		return;
+		goto out;
 	}
 	else if (!strcmp(data.method, "list")) {
 		uh_ubus_send_list(cl, obj, data.params);
-		return;
+		goto out;
 	}
 	else {
 		err = ERROR_METHOD;
@@ -478,6 +480,9 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 
 error:
 	uh_ubus_json_error(cl, err);
+out:
+	if (data.params)
+		free(data.params);
 }
 
 static void __uh_ubus_next_batched_request(struct uloop_timeout *timeout)
