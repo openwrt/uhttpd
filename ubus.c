@@ -427,7 +427,7 @@ static bool uh_ubus_allowed(const char *sid, const char *obj, const char *fun)
 	blobmsg_add_string(&req, "object", obj);
 	blobmsg_add_string(&req, "function", fun);
 
-	ubus_invoke(ctx, id, "access", req.head, uh_ubus_allowed_cb, &allow, 250);
+	ubus_invoke(ctx, id, "access", req.head, uh_ubus_allowed_cb, &allow, conf.script_timeout * 500);
 
 	return allow;
 }
