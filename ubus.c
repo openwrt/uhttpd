@@ -511,9 +511,7 @@ static void uh_ubus_data_done(struct client *cl)
 		return uh_ubus_handle_request_object(cl, obj);
 	case json_type_array:
 		uh_ubus_init_batch(cl);
-		if (json_object_array_length(obj) > 0)
-			return uh_ubus_next_batched_request(cl);
-		/* fall through */
+		return uh_ubus_next_batched_request(cl);
 	default:
 		return uh_ubus_single_error(cl, ERROR_PARSE);
 	}
