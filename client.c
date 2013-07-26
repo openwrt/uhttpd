@@ -312,10 +312,11 @@ static void client_parse_header(struct client *cl, char *data)
 					break;
 				}
 			}
-		} else if (strstr(val, "Safari/") && strstr(val, "Mac OS X"))
-			r->ua = UH_UA_SAFARI;
+		}
 		else if (strstr(val, "Chrome/"))
 			r->ua = UH_UA_CHROME;
+		else if (strstr(val, "Safari/") && strstr(val, "Mac OS X"))
+			r->ua = UH_UA_SAFARI;
 		else if (strstr(val, "Gecko/"))
 			r->ua = UH_UA_GECKO;
 		else if (strstr(val, "Konqueror"))
