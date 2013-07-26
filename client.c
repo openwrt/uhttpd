@@ -293,8 +293,6 @@ static void client_parse_header(struct client *cl, char *data)
 	} else if (!strcmp(data, "connection")) {
 		if (!strcasecmp(val, "close"))
 			r->connection_close = true;
-		else if (!strcasecmp(val, "keep-alive"))
-			r->connection_close = false;
 	} else if (!strcmp(data, "user-agent")) {
 		char *str;
 
