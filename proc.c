@@ -282,9 +282,8 @@ static int proc_data_send(struct client *cl, const char *data, int len)
 			if (errno == EAGAIN || errno == EWOULDBLOCK)
 				break;
 
-			/* error, no retry */
-			len = 0;
-			break;
+			/* consume all data */
+			ret = len;
 		}
 
 		if (!ret)
