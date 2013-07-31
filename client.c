@@ -24,6 +24,7 @@
 #include "tls.h"
 
 static LIST_HEAD(clients);
+static bool client_done = false;
 
 int n_clients = 0;
 struct config conf = {};
@@ -442,6 +443,7 @@ void uh_client_read_cb(struct client *cl)
 	char *str;
 	int len;
 
+	client_done = false;
 	do {
 		str = ustream_get_read_buf(us, &len);
 		if (!str || !len)
@@ -456,11 +458,12 @@ void uh_client_read_cb(struct client *cl)
 				uh_header_error(cl, 413, "Request Entity Too Large");
 			break;
 		}
-	} while(1);
+	} while (!client_done);
 }
 
 static void client_close(struct client *cl)
 {
+	client_done = true;
 	n_clients--;
 	uh_dispatch_done(cl);
 	uloop_timeout_cancel(&cl->timeout);
