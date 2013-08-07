@@ -187,7 +187,6 @@ struct dispatch_ubus {
 	struct json_object *jsobj_cur;
 	int post_len;
 
-	const char *sid;
 	uint32_t obj;
 	const char *func;
 
