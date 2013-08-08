@@ -241,7 +241,7 @@ static void uh_ubus_single_error(struct client *cl, enum rpc_error type)
 	ops->request_done(cl);
 }
 
-static void uh_ubus_send_request(struct client *cl, json_object *obj, struct blob_attr *args)
+static void uh_ubus_send_request(struct client *cl, json_object *obj, const char *sid, struct blob_attr *args)
 {
 	struct dispatch *d = &cl->dispatch;
 	struct dispatch_ubus *du = &d->ubus;
@@ -252,6 +252,8 @@ static void uh_ubus_send_request(struct client *cl, json_object *obj, struct blo
 	blob_buf_init(&req, 0);
 	blobmsg_for_each_attr(cur, args, rem)
 		blobmsg_add_blob(&req, cur);
+
+	blobmsg_add_string(&req, "ubus_rpc_session", sid);
 
 	blob_buf_init(&du->buf, 0);
 	memset(&du->req, 0, sizeof(du->req));
@@ -484,7 +486,7 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 			goto error;
 		}
 
-		uh_ubus_send_request(cl, obj, data.data);
+		uh_ubus_send_request(cl, obj, data.sid, data.data);
 		goto out;
 	}
 	else if (!strcmp(data.method, "list")) {
