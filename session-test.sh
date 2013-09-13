@@ -2,11 +2,11 @@
 . /usr/share/libubox/jshn.sh
 
 json_load "$(ubus call session create)"
-json_get_var sid sid
+json_get_var sid ubus_rpc_session
 
 
 json_init
-json_add_string sid "$sid"
+json_add_string ubus_rpc_session "$sid"
 json_add_array "objects"
 json_add_array ""
 json_add_string "" "session"
@@ -23,11 +23,12 @@ wget -q -O- \
 		"jsonrpc": "2.0",
 		"method" : "call",
 		"params" : [
+			"'$sid'",
 			"session",
 			"test",
 			{},
 		]
-	}' "http://localhost:8080/ubus/$sid"
+	}' "http://localhost:8080/ubus"
 echo "Request 2"
 wget -q -O- \
 	--post-data='[
@@ -35,6 +36,7 @@ wget -q -O- \
 		"jsonrpc": "2.0",
 		"method" : "call",
 		"params" : [
+			"'$sid'",
 			"session",
 			"list",
 			{},
@@ -44,9 +46,10 @@ wget -q -O- \
 		"jsonrpc": "2.0",
 		"method" : "call",
 		"params" : [
+			"'$sid'",
 			"session",
 			"test",
 			{},
 		]
 	},
-	]' "http://localhost:8080/ubus/$sid"
+	]' "http://localhost:8080/ubus"
