@@ -448,7 +448,7 @@ static bool uh_ubus_allowed(const char *sid, const char *obj, const char *fun)
 		return false;
 
 	blob_buf_init(&req, 0);
-	blobmsg_add_string(&req, "sid", sid);
+	blobmsg_add_string(&req, "ubus_rpc_session", sid);
 	blobmsg_add_string(&req, "object", obj);
 	blobmsg_add_string(&req, "function", fun);
 
