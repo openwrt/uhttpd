@@ -250,8 +250,11 @@ static void uh_ubus_send_request(struct client *cl, json_object *obj, const char
 	int ret, rem;
 
 	blob_buf_init(&req, 0);
-	blobmsg_for_each_attr(cur, args, rem)
+	blobmsg_for_each_attr(cur, args, rem) {
+		if (!strcmp(blobmsg_name(cur), "ubus_rpc_session"))
+			return uh_ubus_json_error(cl, ERROR_PARAMS);
 		blobmsg_add_blob(&req, cur);
+	}
 
 	blobmsg_add_string(&req, "ubus_rpc_session", sid);
 
