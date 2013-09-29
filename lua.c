@@ -144,7 +144,7 @@ static lua_State *uh_lua_state_init(void)
 	lua_State *L;
 	int ret;
 
-	L = lua_open();
+	L = luaL_newstate();
 	luaL_openlibs(L);
 
 	/* build uhttpd api table */
