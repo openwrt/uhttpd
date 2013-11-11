@@ -346,6 +346,7 @@ int main(int argc, char **argv)
 			}
 
 			printf("%s", port);
+			return 0;
 			break;
 
 		/* basic auth realm */
