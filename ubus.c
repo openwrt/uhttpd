@@ -332,6 +332,8 @@ static void uh_ubus_send_list(struct client *cl, json_object *obj, struct blob_a
 
 	blob_buf_init(data.buf, 0);
 
+	uh_client_ref(cl);
+
 	if (!params || blob_id(params) != BLOBMSG_TYPE_ARRAY) {
 		r = blobmsg_open_array(data.buf, "result");
 		ubus_lookup(ctx, NULL, uh_ubus_list_cb, &data);
@@ -350,6 +352,8 @@ static void uh_ubus_send_list(struct client *cl, json_object *obj, struct blob_a
 		}
 		blobmsg_close_table(data.buf, r);
 	}
+
+	uh_client_unref(cl);
 
 	uh_ubus_init_response(cl);
 	blobmsg_add_blob(&buf, blob_data(data.buf->head));
@@ -463,6 +467,8 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 	struct rpc_data data = {};
 	enum rpc_error err = ERROR_PARSE;
 
+	uh_client_ref(cl);
+
 	if (json_object_get_type(obj) != json_type_object)
 		goto error;
 
@@ -506,6 +512,8 @@ error:
 out:
 	if (data.params)
 		free(data.params);
+
+	uh_client_unref(cl);
 }
 
 static void __uh_ubus_next_batched_request(struct uloop_timeout *timeout)

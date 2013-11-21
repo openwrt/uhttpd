@@ -35,6 +35,9 @@ void uh_chunk_write(struct client *cl, const void *data, int len)
 {
 	bool chunked = uh_use_chunked(cl);
 
+	if (cl->state == CLIENT_STATE_CLEANUP)
+		return;
+
 	uloop_timeout_set(&cl->timeout, conf.network_timeout * 1000);
 	if (chunked)
 		ustream_printf(cl->us, "%X\r\n", len);
@@ -48,6 +51,9 @@ void uh_chunk_vprintf(struct client *cl, const char *format, va_list arg)
 	char buf[256];
 	va_list arg2;
 	int len;
+
+	if (cl->state == CLIENT_STATE_CLEANUP)
+		return;
 
 	uloop_timeout_set(&cl->timeout, conf.network_timeout * 1000);
 	if (!uh_use_chunked(cl)) {
@@ -79,6 +85,9 @@ void uh_chunk_printf(struct client *cl, const char *format, ...)
 void uh_chunk_eof(struct client *cl)
 {
 	if (!uh_use_chunked(cl))
+		return;
+
+	if (cl->state == CLIENT_STATE_CLEANUP)
 		return;
 
 	ustream_printf(cl->us, "0\r\n\r\n");

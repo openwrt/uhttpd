@@ -463,6 +463,11 @@ void uh_client_read_cb(struct client *cl)
 
 static void client_close(struct client *cl)
 {
+	if (cl->refcount) {
+		cl->state = CLIENT_STATE_CLEANUP;
+		return;
+	}
+
 	client_done = true;
 	n_clients--;
 	uh_dispatch_done(cl);
@@ -482,7 +487,7 @@ void uh_client_notify_state(struct client *cl)
 {
 	struct ustream *s = cl->us;
 
-	if (!s->write_error) {
+	if (!s->write_error && cl->state != CLIENT_STATE_CLEANUP) {
 		if (cl->state == CLIENT_STATE_DATA)
 			return;
 

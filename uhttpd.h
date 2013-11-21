@@ -118,6 +118,7 @@ enum client_state {
 	CLIENT_STATE_DATA,
 	CLIENT_STATE_DONE,
 	CLIENT_STATE_CLOSE,
+	CLIENT_STATE_CLEANUP,
 };
 
 struct interpreter {
@@ -223,6 +224,7 @@ struct dispatch {
 
 struct client {
 	struct list_head list;
+	int refcount;
 	int id;
 
 	struct ustream *us;
@@ -297,5 +299,19 @@ bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
 
 int uh_plugin_init(const char *name);
 void uh_plugin_post_init(void);
+
+static inline void uh_client_ref(struct client *cl)
+{
+	cl->refcount++;
+}
+
+static inline void uh_client_unref(struct client *cl)
+{
+	if (--cl->refcount)
+		return;
+
+	if (cl->state == CLIENT_STATE_CLEANUP)
+		ustream_state_change(cl->us);
+}
 
 #endif
