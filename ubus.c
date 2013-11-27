@@ -127,19 +127,17 @@ static void uh_ubus_send_response(struct client *cl)
 	char *str;
 
 	if (du->array && du->array_idx > 1)
-		sep = ", ";
+		sep = ",";
 
-	str = blobmsg_format_json_indent(buf.head, true, du->array);
+	str = blobmsg_format_json(buf.head, true);
 	ops->chunk_printf(cl, "%s%s", sep, str);
 	free(str);
 
 	du->jsobj_cur = NULL;
 	if (du->array)
 		uh_ubus_next_batched_request(cl);
-	else {
-		ops->chunk_printf(cl, "\n");
+	else
 		return ops->request_done(cl);
-	}
 }
 
 static void uh_ubus_init_response(struct client *cl)
@@ -419,12 +417,12 @@ static void uh_ubus_init_batch(struct client *cl)
 
 	du->array = true;
 	uh_ubus_send_header(cl);
-	ops->chunk_printf(cl, "[\n\t");
+	ops->chunk_printf(cl, "[");
 }
 
 static void uh_ubus_complete_batch(struct client *cl)
 {
-	ops->chunk_printf(cl, "\n]\n");
+	ops->chunk_printf(cl, "]");
 	ops->request_done(cl);
 }
 
