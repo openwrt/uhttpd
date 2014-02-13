@@ -598,10 +598,14 @@ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
 	file_write_cb(cl);
 }
 
+static bool __handle_file_request(struct client *cl, char *url);
+
 static void uh_file_request(struct client *cl, const char *url,
 			    struct path_info *pi, struct blob_attr **tb)
 {
 	int fd;
+	struct http_request *req = &cl->request;
+	char *error_handler;
 
 	if (!(pi->stat.st_mode & S_IROTH))
 		goto error;
@@ -626,6 +630,16 @@ static void uh_file_request(struct client *cl, const char *url,
 	}
 
 error:
+	/* check for a previously set 403 redirect status to prevent infinite
+	   recursion when the error page itself lacks sufficient permissions */
+	if (conf.error_handler && req->redirect_status != 403) {
+		req->redirect_status = 403;
+		error_handler = alloca(strlen(conf.error_handler) + 1);
+		strcpy(error_handler, conf.error_handler);
+		if (__handle_file_request(cl, error_handler))
+			return;
+	}
+
 	uh_client_error(cl, 403, "Forbidden",
 			"You don't have permission to access %s on this server.",
 			url);
