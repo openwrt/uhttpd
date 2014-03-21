@@ -142,7 +142,9 @@ static void relay_read_cb(struct ustream *s, int bytes)
 	if (!buf || !len)
 		return;
 
-	uh_chunk_write(cl, buf, len);
+	if (!r->skip_data)
+		uh_chunk_write(cl, buf, len);
+
 	ustream_consume(s, len);
 }
 

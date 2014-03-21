@@ -152,6 +152,8 @@ struct relay {
 
 	bool process_done;
 	bool error;
+	bool skip_data;
+
 	int ret;
 	int header_ofs;
 

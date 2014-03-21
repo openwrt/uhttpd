@@ -224,6 +224,9 @@ static void proc_handle_header_end(struct relay *r)
 		ustream_printf(cl->us, "%s: %s\r\n", blobmsg_name(cur), blobmsg_data(cur));
 
 	ustream_printf(cl->us, "\r\n");
+
+	if (cl->request.method == UH_HTTP_MSG_HEAD)
+		r->skip_data = true;
 }
 
 static void proc_write_close(struct client *cl)
