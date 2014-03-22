@@ -183,6 +183,13 @@ static void init_defaults_post(void)
 	uh_index_add("index.htm");
 	uh_index_add("default.html");
 	uh_index_add("default.htm");
+
+	if (conf.cgi_prefix) {
+		char *str = malloc(strlen(conf.docroot) + strlen(conf.cgi_prefix) + 1);
+		strcpy(str, conf.docroot);
+		strcat(str, conf.cgi_prefix);
+		conf.cgi_docroot_path = str;
+	};
 }
 
 static void fixup_prefix(char *str)
@@ -406,12 +413,6 @@ int main(int argc, char **argv)
 	}
 
 	uh_config_parse();
-	init_defaults_post();
-
-	if (!bound) {
-		fprintf(stderr, "Error: No sockets bound, unable to continue\n");
-		return 1;
-	}
 
 	if (!conf.docroot) {
 		if (!realpath(".", uh_buf)) {
@@ -419,6 +420,13 @@ int main(int argc, char **argv)
 			return 1;
 		}
 		conf.docroot = strdup(uh_buf);
+	}
+
+	init_defaults_post();
+
+	if (!bound) {
+		fprintf(stderr, "Error: No sockets bound, unable to continue\n");
+		return 1;
 	}
 
 #ifdef HAVE_TLS

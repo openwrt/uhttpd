@@ -52,6 +52,7 @@ struct config {
 	const char *file;
 	const char *error_handler;
 	const char *cgi_prefix;
+	const char *cgi_docroot_path;
 	const char *cgi_path;
 	const char *lua_handler;
 	const char *lua_prefix;
