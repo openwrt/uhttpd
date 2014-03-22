@@ -249,6 +249,7 @@ int main(int argc, char **argv)
 			break;
 #endif
 		case 'p':
+			optarg = strdup(optarg);
 			bound += add_listener_arg(optarg, (ch == 's'));
 			break;
 
@@ -305,6 +306,7 @@ int main(int argc, char **argv)
 			break;
 
 		case 'i':
+			optarg = strdup(optarg);
 			port = strchr(optarg, '=');
 			if (optarg[0] != '.' || !port) {
 				fprintf(stderr, "Error: Invalid interpreter: %s\n",
@@ -337,6 +339,7 @@ int main(int argc, char **argv)
 			break;
 
 		case 'd':
+			optarg = strdup(optarg);
 			port = alloca(strlen(optarg) + 1);
 			if (!port)
 				return -1;
