@@ -201,7 +201,7 @@ static void fixup_prefix(char *str)
 
 	len = strlen(str) - 1;
 
-	while (len > 0 && str[len] == '/')
+	while (len >= 0 && str[len] == '/')
 		len--;
 
 	str[len + 1] = 0;
