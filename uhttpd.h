@@ -68,6 +68,7 @@ struct config {
 	int http_keepalive;
 	int script_timeout;
 	int ubus_noauth;
+	int ubus_cors;
 };
 
 struct auth_realm {
@@ -81,6 +82,7 @@ enum http_method {
 	UH_HTTP_MSG_GET,
 	UH_HTTP_MSG_POST,
 	UH_HTTP_MSG_HEAD,
+	UH_HTTP_MSG_OPTIONS,
 };
 
 enum http_version {

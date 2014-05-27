@@ -39,6 +39,7 @@ const char * const http_methods[] = {
 	[UH_HTTP_MSG_GET] = "GET",
 	[UH_HTTP_MSG_POST] = "POST",
 	[UH_HTTP_MSG_HEAD] = "HEAD",
+	[UH_HTTP_MSG_OPTIONS] = "OPTIONS",
 };
 
 void uh_http_header(struct client *cl, int code, const char *summary)

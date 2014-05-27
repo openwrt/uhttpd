@@ -104,6 +104,13 @@ static const struct {
 	[ERROR_TIMEOUT] = { -32003, "ubus request timed out" },
 };
 
+enum cors_hdr {
+	HDR_ORIGIN,
+	HDR_ACCESS_CONTROL_REQUEST_METHOD,
+	HDR_ACCESS_CONTROL_REQUEST_HEADERS,
+	__HDR_MAX
+};
+
 static void __uh_ubus_next_batched_request(struct uloop_timeout *timeout);
 
 static void uh_ubus_next_batched_request(struct client *cl)
@@ -114,10 +121,52 @@ static void uh_ubus_next_batched_request(struct client *cl)
 	uloop_timeout_set(&du->timeout, 1);
 }
 
+static void uh_ubus_add_cors_headers(struct client *cl)
+{
+	struct blob_attr *tb[__HDR_MAX];
+	static const struct blobmsg_policy hdr_policy[__HDR_MAX] = {
+		[HDR_ORIGIN] = { "origin", BLOBMSG_TYPE_STRING },
+		[HDR_ACCESS_CONTROL_REQUEST_METHOD] = { "access-control-request-method", BLOBMSG_TYPE_STRING },
+		[HDR_ACCESS_CONTROL_REQUEST_HEADERS] = { "access-control-request-headers", BLOBMSG_TYPE_STRING },
+	};
+
+	blobmsg_parse(hdr_policy, __HDR_MAX, tb, blob_data(cl->hdr.head), blob_len(cl->hdr.head));
+
+	if (!tb[HDR_ORIGIN])
+		return;
+
+	if (tb[HDR_ACCESS_CONTROL_REQUEST_METHOD])
+	{
+		char *hdr = (char *) blobmsg_data(tb[HDR_ACCESS_CONTROL_REQUEST_METHOD]);
+
+		if (strcmp(hdr, "POST") && strcmp(hdr, "OPTIONS"))
+			return;
+	}
+
+	ustream_printf(cl->us, "Access-Control-Allow-Origin: %s\r\n",
+	               blobmsg_data(tb[HDR_ORIGIN]));
+
+	if (tb[HDR_ACCESS_CONTROL_REQUEST_HEADERS])
+		ustream_printf(cl->us, "Access-Control-Allow-Headers: %s\r\n",
+		               blobmsg_data(tb[HDR_ACCESS_CONTROL_REQUEST_HEADERS]));
+
+	ustream_printf(cl->us, "Access-Control-Allow-Methods: POST, OPTIONS\r\n");
+	ustream_printf(cl->us, "Access-Control-Allow-Credentials: true\r\n");
+}
+
 static void uh_ubus_send_header(struct client *cl)
 {
 	ops->http_header(cl, 200, "OK");
-	ustream_printf(cl->us, "Content-Type: application/json\r\n\r\n");
+
+	if (conf.ubus_cors)
+		uh_ubus_add_cors_headers(cl);
+
+	ustream_printf(cl->us, "Content-Type: application/json\r\n");
+
+	if (cl->request.method == UH_HTTP_MSG_OPTIONS)
+		ustream_printf(cl->us, "Content-Length: 0\r\n");
+
+	ustream_printf(cl->us, "\r\n");
 }
 
 static void uh_ubus_send_response(struct client *cl)
@@ -571,14 +620,24 @@ static void uh_ubus_handle_request(struct client *cl, char *url, struct path_inf
 
 	blob_buf_init(&buf, 0);
 
-	if (cl->request.method != UH_HTTP_MSG_POST)
-		return ops->client_error(cl, 400, "Bad Request", "Invalid Request");
+	switch (cl->request.method)
+	{
+	case UH_HTTP_MSG_POST:
+		d->data_send = uh_ubus_data_send;
+		d->data_done = uh_ubus_data_done;
+		d->close_fds = uh_ubus_close_fds;
+		d->free = uh_ubus_request_free;
+		d->ubus.jstok = json_tokener_new();
+		break;
 
-	d->close_fds = uh_ubus_close_fds;
-	d->free = uh_ubus_request_free;
-	d->data_send = uh_ubus_data_send;
-	d->data_done = uh_ubus_data_done;
-	d->ubus.jstok = json_tokener_new();
+	case UH_HTTP_MSG_OPTIONS:
+		uh_ubus_send_header(cl);
+		ops->request_done(cl);
+		break;
+
+	default:
+		ops->client_error(cl, 400, "Bad Request", "Invalid Request");
+	}
 }
 
 static bool

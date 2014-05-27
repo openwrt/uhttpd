@@ -25,7 +25,7 @@ bool uh_use_chunked(struct client *cl)
 	if (cl->request.version != UH_HTTP_VER_1_1)
 		return false;
 
-	if (cl->request.method == UH_HTTP_MSG_HEAD)
+	if (cl->request.method == UH_HTTP_MSG_HEAD || cl->request.method == UH_HTTP_MSG_OPTIONS)
 		return false;
 
 	return true;
