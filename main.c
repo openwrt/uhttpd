@@ -246,7 +246,7 @@ int main(int argc, char **argv)
 		case 'K':
 		case 's':
 			fprintf(stderr, "uhttpd: TLS support not compiled, "
-			                "ignoring -%c\n", opt);
+			                "ignoring -%c\n", ch);
 			break;
 #endif
 		case 'p':
@@ -388,7 +388,7 @@ int main(int argc, char **argv)
 		case 'l':
 		case 'L':
 			fprintf(stderr, "uhttpd: Lua support not compiled, "
-			                "ignoring -%c\n", opt);
+			                "ignoring -%c\n", ch);
 			break;
 #endif
 #ifdef HAVE_UBUS
@@ -413,7 +413,7 @@ int main(int argc, char **argv)
 		case 'U':
 		case 'X':
 			fprintf(stderr, "uhttpd: UBUS support not compiled, "
-			                "ignoring -%c\n", opt);
+			                "ignoring -%c\n", ch);
 			break;
 #endif
 		default:
