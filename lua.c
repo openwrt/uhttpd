@@ -255,7 +255,7 @@ static void lua_main(struct client *cl, struct path_info *pi, char *url)
 
 		printf("Status: 500 Internal Server Error\r\n\r\n"
 	       "Unable to launch the requested Lua program:\n"
-	       "  %s: %s\n", pi->phys, strerror(errno));
+	       "  %s: %s\n", pi->phys, error);
 	}
 
 	exit(0);
