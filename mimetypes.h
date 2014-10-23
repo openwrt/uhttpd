@@ -46,6 +46,8 @@ static const struct mimetype uh_mime_types[] = {
 	{ "jpeg",    "image/jpeg" },
 	{ "svg",     "image/svg+xml" },
 
+	{ "json",    "application/json" },
+	{ "jsonp",   "application/javascript" },
 	{ "zip",     "application/zip" },
 	{ "pdf",     "application/pdf" },
 	{ "xml",     "application/xml" },
