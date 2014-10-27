@@ -567,7 +567,6 @@ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
 		!uh_file_if_range(cl, &pi->stat) ||
 		!uh_file_if_unmodified_since(cl, &pi->stat) ||
 		!uh_file_if_none_match(cl, &pi->stat)) {
-		ustream_printf(cl->us, "Content-Length: 0\r\n");
 		ustream_printf(cl->us, "\r\n");
 		uh_request_done(cl);
 		close(fd);
