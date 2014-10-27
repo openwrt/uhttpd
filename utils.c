@@ -28,6 +28,10 @@ bool uh_use_chunked(struct client *cl)
 	if (cl->request.method == UH_HTTP_MSG_HEAD || cl->request.method == UH_HTTP_MSG_OPTIONS)
 		return false;
 
+	/* RFC2616 10.2.5, 10.3.5 */
+	if (cl->http_code == 204 || cl->http_code == 304)
+		return false;
+
 	return true;
 }
 
