@@ -243,6 +243,7 @@ struct client {
 	enum client_state state;
 	bool tls;
 
+	int http_code;
 	struct http_request request;
 	struct uh_addr srv_addr, peer_addr;
 

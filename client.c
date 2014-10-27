@@ -48,6 +48,8 @@ void uh_http_header(struct client *cl, int code, const char *summary)
 	const char *enc = "Transfer-Encoding: chunked\r\n";
 	const char *conn;
 
+	cl->http_code = code;
+
 	if (!uh_use_chunked(cl))
 		enc = "";
 
