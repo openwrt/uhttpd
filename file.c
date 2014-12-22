@@ -479,11 +479,11 @@ static void list_entries(struct client *cl, struct dirent **files, int count,
 		bool dir = !!(files[i]->d_type & DT_DIR);
 
 		if (name[0] == '.' && name[1] == 0)
-			continue;
+			goto next;
 
 		sprintf(file, "%s", name);
 		if (stat(local_path, &s))
-			continue;
+			goto next;
 
 		if (!dir) {
 			suffix = "";
@@ -492,7 +492,7 @@ static void list_entries(struct client *cl, struct dirent **files, int count,
 		}
 
 		if (!(s.st_mode & mode))
-			continue;
+			goto next;
 
 		uh_chunk_printf(cl,
 				"<li><strong><a href='%s%s%s'>%s</a>%s"
@@ -505,6 +505,7 @@ static void list_entries(struct client *cl, struct dirent **files, int count,
 				type, s.st_size / 1024.0);
 
 		*file = 0;
+next:
 		free(files[i]);
 	}
 }
