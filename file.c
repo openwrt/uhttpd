@@ -26,6 +26,7 @@
 #include <time.h>
 #include <strings.h>
 #include <dirent.h>
+#include <stdint.h>
 
 #include <libubox/blobmsg.h>
 
@@ -287,10 +288,8 @@ static const char * uh_file_mime_lookup(const char *path)
 
 static const char * uh_file_mktag(struct stat *s, char *buf, int len)
 {
-	snprintf(buf, len, "\"%x-%x-%x\"",
-			 (unsigned int) s->st_ino,
-			 (unsigned int) s->st_size,
-			 (unsigned int) s->st_mtime);
+	snprintf(buf, len, "\"%" PRIx64 "-%" PRIx64 "-%" PRIx64 "\"",
+	         s->st_ino, s->st_size, s->st_mtime);
 
 	return buf;
 }
@@ -580,7 +579,7 @@ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
 	ustream_printf(cl->us, "Content-Type: %s\r\n",
 			   uh_file_mime_lookup(pi->name));
 
-	ustream_printf(cl->us, "Content-Length: %i\r\n\r\n",
+	ustream_printf(cl->us, "Content-Length: %" PRIu64 "\r\n\r\n",
 			   pi->stat.st_size);
 
 

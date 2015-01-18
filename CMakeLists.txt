@@ -5,7 +5,7 @@ PROJECT(uhttpd C)
 INCLUDE (CheckFunctionExists)
 
 SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
-ADD_DEFINITIONS(-Os -Wall -Werror -Wmissing-declarations --std=gnu99 -g3)
+ADD_DEFINITIONS(-D_FILE_OFFSET_BITS=64 -Os -Wall -Werror -Wmissing-declarations --std=gnu99 -g3)
 
 OPTION(TLS_SUPPORT "TLS support" ON)
 OPTION(LUA_SUPPORT "Lua support" ON)
