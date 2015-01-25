@@ -295,6 +295,6 @@ static int lua_plugin_init(const struct uhttpd_ops *o, struct config *c)
 	return 0;
 }
 
-const struct uhttpd_plugin uhttpd_plugin = {
+struct uhttpd_plugin uhttpd_plugin = {
 	.init = lua_plugin_init,
 };
