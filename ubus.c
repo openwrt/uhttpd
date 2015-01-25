@@ -679,7 +679,7 @@ static void uh_ubus_post_init(void)
 	ubus_add_uloop(ctx);
 }
 
-const struct uhttpd_plugin uhttpd_plugin = {
+struct uhttpd_plugin uhttpd_plugin = {
 	.init = uh_ubus_plugin_init,
 	.post_init = uh_ubus_post_init,
 };
