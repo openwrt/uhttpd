@@ -289,7 +289,7 @@ static const char * uh_file_mime_lookup(const char *path)
 static const char * uh_file_mktag(struct stat *s, char *buf, int len)
 {
 	snprintf(buf, len, "\"%" PRIx64 "-%" PRIx64 "-%" PRIx64 "\"",
-	         s->st_ino, s->st_size, s->st_mtime);
+	         s->st_ino, s->st_size, (uint64_t)s->st_mtime);
 
 	return buf;
 }
