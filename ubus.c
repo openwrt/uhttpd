@@ -192,16 +192,16 @@ static void uh_ubus_send_response(struct client *cl)
 static void uh_ubus_init_response(struct client *cl)
 {
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
-	struct json_object *obj = du->jsobj_cur;
+	struct json_object *obj = du->jsobj_cur, *obj2 = NULL;
 
 	blob_buf_init(&buf, 0);
 	blobmsg_add_string(&buf, "jsonrpc", "2.0");
 
 	if (obj)
-		obj = json_object_object_get(obj, "id");
+		json_object_object_get_ex(obj, "id", &obj2);
 
-	if (obj)
-		blobmsg_add_json_element(&buf, "id", obj);
+	if (obj2)
+		blobmsg_add_json_element(&buf, "id", obj2);
 	else
 		blobmsg_add_field(&buf, BLOBMSG_TYPE_UNSPEC, "id", NULL, 0);
 }

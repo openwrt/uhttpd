@@ -31,7 +31,7 @@
 #include <libubox/utils.h>
 #ifdef HAVE_UBUS
 #include <libubus.h>
-#include <json/json.h>
+#include <json-c/json.h>
 #endif
 #ifdef HAVE_TLS
 #include <libubox/ustream-ssl.h>
