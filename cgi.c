@@ -52,12 +52,12 @@ static void cgi_main(struct client *cl, struct path_info *pi, char *url)
 		setenv(var->name, var->value, 1);
 	}
 
-	chdir(pi->root);
-
-	if (ip)
-		execl(ip->path, ip->path, pi->phys, NULL);
-	else
-		execl(pi->phys, pi->phys, NULL);
+	if (!chdir(pi->root)) {
+		if (ip)
+			execl(ip->path, ip->path, pi->phys, NULL);
+		else
+			execl(pi->phys, pi->phys, NULL);
+	}
 
 	printf("Status: 500 Internal Server Error\r\n\r\n"
 	       "Unable to launch the requested CGI program:\n"
