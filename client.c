@@ -264,7 +264,7 @@ static bool tls_redirect_check(struct client *cl)
 	cl->request.respond_chunked = false;
 	cl->request.connection_close = true;
 
-	uh_http_header(cl, 302, "Found");
+	uh_http_header(cl, 307, "Temporary Redirect");
 
 	if (port != 443)
 		ustream_printf(cl->us, "Location: https://%s:%d%s\r\n\r\n", host, port, url);
