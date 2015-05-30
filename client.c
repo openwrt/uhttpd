@@ -50,7 +50,7 @@ void uh_http_header(struct client *cl, int code, const char *summary)
 
 	cl->http_code = code;
 
-	if (!uh_use_chunked(cl))
+	if (!cl->request.respond_chunked)
 		enc = "";
 
 	if (r->connection_close)
@@ -187,6 +187,8 @@ static int client_parse_request(struct client *cl, char *data)
 	if (req->version < UH_HTTP_VER_1_1 || req->method == UH_HTTP_MSG_POST ||
 	    !conf.http_keepalive)
 		req->connection_close = true;
+
+	req->respond_chunked = uh_use_chunked(cl);
 
 	return CLIENT_STATE_HEADER;
 }

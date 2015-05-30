@@ -111,6 +111,7 @@ struct http_request {
 	int content_length;
 	bool expect_cont;
 	bool connection_close;
+	bool respond_chunked;
 	uint8_t transfer_chunked;
 	const struct auth_realm *realm;
 };
