@@ -134,6 +134,7 @@ static int usage(const char *name)
 		"	-s [addr:]port  Like -p but provide HTTPS on this port\n"
 		"	-C file         ASN.1 server certificate file\n"
 		"	-K file         ASN.1 server private key file\n"
+		"	-q              Redirect all HTTP requests to HTTPS\n"
 #endif
 		"	-h directory    Specify the document root, default is '.'\n"
 		"	-E string       Use given virtual URL as 404 error handler\n"
@@ -227,7 +228,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "afSDRXC:K:E:I:p:s:h:c:l:L:d:r:m:n:N:x:i:t:k:T:A:u:U:")) != -1) {
+	while ((ch = getopt(argc, argv, "afqSDRXC:K:E:I:p:s:h:c:l:L:d:r:m:n:N:x:i:t:k:T:A:u:U:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -238,12 +239,17 @@ int main(int argc, char **argv)
 			tls_key = optarg;
 			break;
 
+		case 'q':
+			conf.tls_redirect = 1;
+			break;
+
 		case 's':
 			n_tls++;
 			/* fall through */
 #else
 		case 'C':
 		case 'K':
+		case 'q':
 		case 's':
 			fprintf(stderr, "uhttpd: TLS support not compiled, "
 			                "ignoring -%c\n", ch);

@@ -230,11 +230,60 @@ static bool rfc1918_filter_check(struct client *cl)
 	return false;
 }
 
+static bool tls_redirect_check(struct client *cl)
+{
+	int rem, port;
+	struct blob_attr *cur;
+	char *ptr, *url = NULL, *host = NULL;
+
+	if (cl->tls || !conf.tls_redirect)
+		return true;
+
+	if ((port = uh_first_tls_port(cl->srv_addr.family)) == -1)
+		return true;
+
+	blob_for_each_attr(cur, cl->hdr.head, rem) {
+		if (!strcmp(blobmsg_name(cur), "host"))
+			host = blobmsg_get_string(cur);
+
+		if (!strcmp(blobmsg_name(cur), "URL"))
+			url = blobmsg_get_string(cur);
+
+		if (url && host)
+			break;
+	}
+
+	if (!url || !host)
+		return true;
+
+	if ((ptr = strchr(host, ']')) != NULL)
+		*(ptr+1) = 0;
+	else if ((ptr = strchr(host, ':')) != NULL)
+		*ptr = 0;
+
+	cl->request.respond_chunked = false;
+	cl->request.connection_close = true;
+
+	uh_http_header(cl, 302, "Found");
+
+	if (port != 443)
+		ustream_printf(cl->us, "Location: https://%s:%d%s\r\n\r\n", host, port, url);
+	else
+		ustream_printf(cl->us, "Location: https://%s%s\r\n\r\n", host, url);
+
+	uh_request_done(cl);
+
+	return false;
+}
+
 static void client_header_complete(struct client *cl)
 {
 	struct http_request *r = &cl->request;
 
 	if (!rfc1918_filter_check(cl))
+		return;
+
+	if (!tls_redirect_check(cl))
 		return;
 
 	if (r->expect_cont)

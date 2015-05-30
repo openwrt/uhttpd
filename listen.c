@@ -187,6 +187,7 @@ int uh_socket_bind(const char *host, const char *port, bool tls)
 
 		l->fd.fd = sock;
 		l->tls = tls;
+		l->addr = *(struct sockaddr_in6 *)p->ai_addr;
 		list_add_tail(&l->list, &listeners);
 		bound++;
 
@@ -200,4 +201,22 @@ error:
 	freeaddrinfo(addrs);
 
 	return bound;
+}
+
+int uh_first_tls_port(int family)
+{
+	struct listener *l;
+	int tls_port = -1;
+
+	list_for_each_entry(l, &listeners, list) {
+		if (!l->tls || l->addr.sin6_family != family)
+			continue;
+
+		if (tls_port != -1 && ntohs(l->addr.sin6_port) != 443)
+			continue;
+
+		tls_port = ntohs(l->addr.sin6_port);
+	}
+
+	return tls_port;
 }

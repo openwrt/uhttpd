@@ -62,6 +62,7 @@ struct config {
 	int no_dirlists;
 	int network_timeout;
 	int rfc1918_filter;
+	int tls_redirect;
 	int tcp_keepalive;
 	int max_script_requests;
 	int max_connections;
@@ -266,6 +267,8 @@ bool uh_accept_client(int fd, bool tls);
 void uh_unblock_listeners(void);
 void uh_setup_listeners(void);
 int uh_socket_bind(const char *host, const char *port, bool tls);
+
+int uh_first_tls_port(int family);
 
 bool uh_use_chunked(struct client *cl);
 void uh_chunk_write(struct client *cl, const void *data, int len);
