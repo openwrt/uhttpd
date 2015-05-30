@@ -81,6 +81,7 @@ enum extra_vars {
 	VAR_METHOD,
 	VAR_PATH_INFO,
 	VAR_USER,
+	VAR_HTTPS,
 	VAR_REDIRECT,
 	VAR_SERVER_NAME,
 	VAR_SERVER_ADDR,
@@ -108,6 +109,7 @@ static struct env_var extra_vars[] = {
 	[VAR_METHOD] = { "REQUEST_METHOD" },
 	[VAR_PATH_INFO] = { "PATH_INFO" },
 	[VAR_USER] = { "REMOTE_USER" },
+	[VAR_HTTPS] = { "HTTPS" },
 	[VAR_REDIRECT] = { "REDIRECT_STATUS", redirect_status },
 	[VAR_SERVER_NAME] = { "SERVER_NAME", local_addr },
 	[VAR_SERVER_ADDR] = { "SERVER_ADDR", local_addr },
@@ -143,6 +145,7 @@ struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi)
 	extra_vars[VAR_METHOD].value = http_methods[req->method];
 	extra_vars[VAR_PATH_INFO].value = pi->info;
 	extra_vars[VAR_USER].value = req->realm ? req->realm->user : NULL;
+	extra_vars[VAR_HTTPS].value = cl->tls ? "on" : NULL;
 
 	snprintf(redirect_status, sizeof(redirect_status),
 		 "%d", req->redirect_status);
