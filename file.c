@@ -614,6 +614,7 @@ static void uh_file_request(struct client *cl, const char *url,
 		if (fd < 0)
 			goto error;
 
+		req->respond_chunked = false;
 		cl->dispatch.file.hdr = tb;
 		uh_file_data(cl, pi, fd);
 		cl->dispatch.file.hdr = NULL;
