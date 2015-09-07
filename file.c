@@ -696,8 +696,11 @@ static void uh_complete_request(struct client *cl)
 		dr = list_first_entry(&pending_requests, struct deferred_request, list);
 		list_del(&dr->list);
 
+		cl = dr->cl;
 		dr->called = true;
-		uh_invoke_script(dr->cl, dr->d, dr->path ? &dr->pi : NULL);
+		cl->dispatch.data_blocked = false;
+		uh_invoke_script(cl, dr->d, dr->path ? &dr->pi : NULL);
+		client_poll_post_data(cl);
 	}
 }
 
@@ -756,6 +759,7 @@ uh_defer_script(struct client *cl, struct dispatch_handler *d, struct path_info 
 	}
 
 	cl->dispatch.req_data = dr;
+	cl->dispatch.data_blocked = true;
 	dr->cl = cl;
 	dr->d = d;
 	list_add(&dr->list, &pending_requests);
