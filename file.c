@@ -26,7 +26,7 @@
 #include <time.h>
 #include <strings.h>
 #include <dirent.h>
-#include <stdint.h>
+#include <inttypes.h>
 
 #include <libubox/blobmsg.h>
 
