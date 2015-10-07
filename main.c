@@ -155,6 +155,7 @@ static int usage(const char *name)
 		"	-X		Enable CORS HTTP headers on JSON-RPC api\n"
 #endif
 		"	-x string       URL prefix for CGI handler, default is '/cgi-bin'\n"
+		"	-y alias[=path]	URL alias handle\n"
 		"	-i .ext=path    Use interpreter at path for files with the given extension\n"
 		"	-t seconds      CGI, Lua and UBUS script timeout in seconds, default is 60\n"
 		"	-T seconds      Network timeout in seconds, default is 30\n"
@@ -177,6 +178,7 @@ static void init_defaults_pre(void)
 	conf.realm = "Protected Area";
 	conf.cgi_prefix = "/cgi-bin";
 	conf.cgi_path = "/sbin:/usr/sbin:/bin:/usr/bin";
+	INIT_LIST_HEAD(&conf.cgi_alias);
 }
 
 static void init_defaults_post(void)
@@ -188,9 +190,11 @@ static void init_defaults_post(void)
 
 	if (conf.cgi_prefix) {
 		char *str = malloc(strlen(conf.docroot) + strlen(conf.cgi_prefix) + 1);
+
 		strcpy(str, conf.docroot);
 		strcat(str, conf.cgi_prefix);
 		conf.cgi_docroot_path = str;
+		conf.cgi_prefix_len = strlen(conf.cgi_prefix);
 	};
 }
 
@@ -211,12 +215,12 @@ static void fixup_prefix(char *str)
 
 int main(int argc, char **argv)
 {
+	struct alias *alias;
 	bool nofork = false;
 	char *port;
 	int opt, ch;
 	int cur_fd;
 	int bound = 0;
-
 #ifdef HAVE_TLS
 	int n_tls = 0;
 	const char *tls_key = NULL, *tls_crt = NULL;
@@ -228,7 +232,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "afqSDRXC:K:E:I:p:s:h:c:l:L:d:r:m:n:N:x:i:t:k:T:A:u:U:")) != -1) {
+	while ((ch = getopt(argc, argv, "afqSDRXC:K:E:I:p:s:h:c:l:L:d:r:m:n:N:x:y:i:t:k:T:A:u:U:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -310,6 +314,19 @@ int main(int argc, char **argv)
 		case 'x':
 			fixup_prefix(optarg);
 			conf.cgi_prefix = optarg;
+			break;
+
+		case 'y':
+			alias = calloc(1, sizeof(*alias));
+			if (!alias) {
+				fprintf(stderr, "Error: failed to allocate alias\n");
+				exit(1);
+			}
+			alias->alias = strdup(optarg);
+			alias->path = strchr(alias->alias, '=');
+			if (alias->path)
+				*alias->path++ = 0;
+			list_add(&alias->list, &conf.cgi_alias);
 			break;
 
 		case 'i':

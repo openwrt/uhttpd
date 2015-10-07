@@ -33,6 +33,8 @@
 #include "uhttpd.h"
 #include "mimetypes.h"
 
+#define MAX(a, b)	(((a) > (b)) ? (a) : (b))
+
 static LIST_HEAD(index_files);
 static LIST_HEAD(dispatch_handlers);
 static LIST_HEAD(pending_requests);
@@ -815,12 +817,52 @@ static bool __handle_file_request(struct client *cl, char *url)
 	return true;
 }
 
+static char *uh_handle_alias(char *old_url)
+{
+	struct alias *alias;
+	static char *new_url;
+	static int url_len;
+
+	if (!list_empty(&conf.cgi_alias)) list_for_each_entry(alias, &conf.cgi_alias, list) {
+		int old_len;
+		int new_len;
+		int path_len = 0;
+
+		if (uh_path_match(alias->alias, old_url))
+			continue;
+
+		if (alias->path)
+			path_len = strlen(alias->path);
+
+		old_len = strlen(old_url) + 1;
+		new_len = old_len + MAX(conf.cgi_prefix_len, path_len);
+
+		if (new_len > url_len) {
+			new_url = realloc(new_url, new_len);
+			url_len = new_len;
+		}
+
+		*new_url = '\0';
+
+		if (alias->path)
+			strcpy(new_url, alias->path);
+		else if (conf.cgi_prefix)
+			strcpy(new_url, conf.cgi_prefix);
+		strcat(new_url, old_url);
+
+		return new_url;
+	}
+	return old_url;
+}
+
 void uh_handle_request(struct client *cl)
 {
 	struct http_request *req = &cl->request;
 	struct dispatch_handler *d;
 	char *url = blobmsg_data(blob_data(cl->hdr.head));
 	char *error_handler;
+
+	url = uh_handle_alias(url);
 
 	req->redirect_status = 200;
 	d = dispatch_find(url, NULL);

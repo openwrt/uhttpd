@@ -46,6 +46,12 @@
 
 struct client;
 
+struct alias {
+	struct list_head list;
+	char *alias;
+	char *path;
+};
+
 struct config {
 	const char *docroot;
 	const char *realm;
@@ -70,6 +76,8 @@ struct config {
 	int script_timeout;
 	int ubus_noauth;
 	int ubus_cors;
+	int cgi_prefix_len;
+	struct list_head cgi_alias;
 };
 
 struct auth_realm {
