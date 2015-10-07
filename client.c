@@ -50,7 +50,7 @@ void uh_http_header(struct client *cl, int code, const char *summary)
 
 	cl->http_code = code;
 
-	if (!cl->request.respond_chunked)
+	if (!uh_use_chunked(cl))
 		enc = "";
 
 	if (r->connection_close)
@@ -188,8 +188,6 @@ static int client_parse_request(struct client *cl, char *data)
 	    !conf.http_keepalive)
 		req->connection_close = true;
 
-	req->respond_chunked = uh_use_chunked(cl);
-
 	return CLIENT_STATE_HEADER;
 }
 
@@ -261,7 +259,7 @@ static bool tls_redirect_check(struct client *cl)
 	else if ((ptr = strchr(host, ':')) != NULL)
 		*ptr = 0;
 
-	cl->request.respond_chunked = false;
+	cl->request.disable_chunked = true;
 	cl->request.connection_close = true;
 
 	uh_http_header(cl, 307, "Temporary Redirect");

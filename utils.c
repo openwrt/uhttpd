@@ -32,12 +32,12 @@ bool uh_use_chunked(struct client *cl)
 	if (cl->http_code == 204 || cl->http_code == 304)
 		return false;
 
-	return true;
+	return !cl->request.disable_chunked;
 }
 
 void uh_chunk_write(struct client *cl, const void *data, int len)
 {
-	bool chunked = cl->request.respond_chunked;
+	bool chunked = uh_use_chunked(cl);
 
 	if (cl->state == CLIENT_STATE_CLEANUP)
 		return;
@@ -60,7 +60,7 @@ void uh_chunk_vprintf(struct client *cl, const char *format, va_list arg)
 		return;
 
 	uloop_timeout_set(&cl->timeout, conf.network_timeout * 1000);
-	if (!cl->request.respond_chunked) {
+	if (!uh_use_chunked(cl)) {
 		ustream_vprintf(cl->us, format, arg);
 		return;
 	}
@@ -88,7 +88,7 @@ void uh_chunk_printf(struct client *cl, const char *format, ...)
 
 void uh_chunk_eof(struct client *cl)
 {
-	if (!cl->request.respond_chunked)
+	if (!uh_use_chunked(cl))
 		return;
 
 	if (cl->state == CLIENT_STATE_CLEANUP)
