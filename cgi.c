@@ -104,7 +104,11 @@ static bool check_cgi_path(struct path_info *pi, const char *url)
 	}
 
 	pi->ip = NULL;
-	return uh_path_match(conf.cgi_docroot_path, pi->phys);
+
+	if (conf.cgi_docroot_path)
+		return uh_path_match(conf.cgi_docroot_path, pi->phys);
+
+	return false;
 }
 
 struct dispatch_handler cgi_dispatch = {
