@@ -828,7 +828,7 @@ static char *uh_handle_alias(char *old_url)
 		int new_len;
 		int path_len = 0;
 
-		if (uh_path_match(alias->alias, old_url))
+		if (!uh_path_match(alias->alias, old_url))
 			continue;
 
 		if (alias->path)
