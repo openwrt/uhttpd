@@ -232,7 +232,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "afqSDRXC:K:E:I:p:s:h:c:l:L:d:r:m:n:N:x:y:i:t:k:T:A:u:U:")) != -1) {
+	while ((ch = getopt(argc, argv, "A:aC:c:Dd:E:fh:I:i:K:k:L:l:m:N:n:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
