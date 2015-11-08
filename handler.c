@@ -41,19 +41,29 @@ static void
 handle_redirect(struct json_script_ctx *ctx, struct blob_attr *data)
 {
 	struct client *cl = cur_client;
-	static struct blobmsg_policy policy = {
-		 .type = BLOBMSG_TYPE_STRING,
+	static struct blobmsg_policy policy[3] = {
+		 { .type = BLOBMSG_TYPE_STRING },
+		 { .type = BLOBMSG_TYPE_INT32 },
+		 { .type = BLOBMSG_TYPE_STRING },
 	};
-	struct blob_attr *tb;
+	struct blob_attr *tb[3];
+	const char *status = "Found";
+	int code = 302;
 
-	blobmsg_parse_array(&policy, 1, &tb, blobmsg_data(data), blobmsg_data_len(data));
-	if (!tb)
+	blobmsg_parse_array(policy, ARRAY_SIZE(policy), tb, blobmsg_data(data), blobmsg_data_len(data));
+	if (!tb[0])
 		return;
 
-	uh_http_header(cl, 302, "Found");
+	if (tb[1]) {
+		code = blobmsg_get_u32(tb[1]);
+		if (tb[2])
+			status = blobmsg_get_string(tb[2]);
+	}
+
+	uh_http_header(cl, code, status);
 	ustream_printf(cl->us, "Content-Length: 0\r\n");
 	ustream_printf(cl->us, "Location: %s\r\n\r\n",
-		       blobmsg_get_string(tb));
+		       blobmsg_get_string(tb[0]));
 	uh_request_done(cl);
 	*cur_url = NULL;
 
