@@ -235,7 +235,8 @@ uh_path_lookup(struct client *cl, const char *url)
 	   url with trailing slash appended */
 	if (!slash) {
 		uh_http_header(cl, 302, "Found");
-		ustream_printf(cl->us, "Content-Length: 0\r\n");
+		if (!uh_use_chunked(cl))
+			ustream_printf(cl->us, "Content-Length: 0\r\n");
 		ustream_printf(cl->us, "Location: %s%s%s\r\n\r\n",
 				&path_phys[docroot_len],
 				p.query ? "?" : "",
