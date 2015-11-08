@@ -232,7 +232,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "A:aC:c:Dd:E:fh:I:i:K:k:L:l:m:N:n:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "A:aC:c:Dd:E:fh:H:I:i:K:k:L:l:m:N:n:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -271,6 +271,14 @@ int main(int argc, char **argv)
 				exit(1);
 			}
 			conf.docroot = strdup(uh_buf);
+			break;
+
+		case 'H':
+			if (uh_handler_add(optarg)) {
+				fprintf(stderr, "Error: Failed to load handler script %s\n",
+					optarg);
+				exit(1);
+			}
 			break;
 
 		case 'E':

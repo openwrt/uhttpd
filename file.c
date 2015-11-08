@@ -127,7 +127,7 @@ next:
 /* Returns NULL on error.
 ** NB: improperly encoded URL should give client 400 [Bad Syntax]; returning
 ** NULL here causes 404 [Not Found], but that's not too unreasonable. */
-static struct path_info *
+struct path_info *
 uh_path_lookup(struct client *cl, const char *url)
 {
 	static char path_phys[PATH_MAX];
@@ -864,12 +864,20 @@ void uh_handle_request(struct client *cl)
 
 	url = uh_handle_alias(url);
 
+	uh_handler_run(cl, &url, false);
+	if (!url)
+		return;
+
 	req->redirect_status = 200;
 	d = dispatch_find(url, NULL);
 	if (d)
 		return uh_invoke_handler(cl, d, url, NULL);
 
 	if (__handle_file_request(cl, url))
+		return;
+
+	if (uh_handler_run(cl, &url, true) &&
+	    (!url || __handle_file_request(cl, url)))
 		return;
 
 	req->redirect_status = 404;

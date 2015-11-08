@@ -318,6 +318,11 @@ bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
 int uh_plugin_init(const char *name);
 void uh_plugin_post_init(void);
 
+int uh_handler_add(const char *file);
+int uh_handler_run(struct client *cl, char **url, bool fallback);
+
+struct path_info *uh_path_lookup(struct client *cl, const char *url);
+
 static inline void uh_client_ref(struct client *cl)
 {
 	cl->refcount++;
