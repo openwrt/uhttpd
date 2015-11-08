@@ -100,7 +100,7 @@ handle_command(struct json_script_ctx *ctx, const char *name,
 		void (*func)(struct json_script_ctx *ctx, struct blob_attr *data);
 	} cmds[] = {
 		{ "redirect", handle_redirect },
-		{ "set_uri", handle_set_uri }
+		{ "rewrite", handle_set_uri }
 	};
 	int i;
 
