@@ -61,7 +61,8 @@ handle_redirect(struct json_script_ctx *ctx, struct blob_attr *data)
 	}
 
 	uh_http_header(cl, code, status);
-	ustream_printf(cl->us, "Content-Length: 0\r\n");
+	if (!uh_use_chunked(cl))
+		ustream_printf(cl->us, "Content-Length: 0\r\n");
 	ustream_printf(cl->us, "Location: %s\r\n\r\n",
 		       blobmsg_get_string(tb[0]));
 	uh_request_done(cl);
