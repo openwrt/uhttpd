@@ -121,6 +121,14 @@ handle_add_header(struct json_script_ctx *ctx, struct blob_attr *data)
 }
 
 static void
+handle_no_cache(struct json_script_ctx *ctx, struct blob_attr *data)
+{
+	struct client *cl = cur_client;
+
+	cl->dispatch.no_cache = true;
+}
+
+static void
 handle_command(struct json_script_ctx *ctx, const char *name,
 	       struct blob_attr *data, struct blob_attr *vars)
 {
@@ -131,6 +139,7 @@ handle_command(struct json_script_ctx *ctx, const char *name,
 		{ "redirect", handle_redirect },
 		{ "rewrite", handle_set_uri },
 		{ "add-header", handle_add_header },
+		{ "no-cache", handle_no_cache },
 	};
 	int i;
 

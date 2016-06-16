@@ -224,6 +224,7 @@ struct dispatch {
 	void (*req_free)(struct client *cl);
 
 	bool data_blocked;
+	bool no_cache;
 
 	union {
 		struct {

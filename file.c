@@ -565,11 +565,12 @@ static void uh_file_free(struct client *cl)
 static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
 {
 	/* test preconditions */
-	if (!uh_file_if_modified_since(cl, &pi->stat) ||
-		!uh_file_if_match(cl, &pi->stat) ||
-		!uh_file_if_range(cl, &pi->stat) ||
-		!uh_file_if_unmodified_since(cl, &pi->stat) ||
-		!uh_file_if_none_match(cl, &pi->stat)) {
+	if (!cl->dispatch.no_cache &&
+	    (!uh_file_if_modified_since(cl, &pi->stat) ||
+	     !uh_file_if_match(cl, &pi->stat) ||
+	     !uh_file_if_range(cl, &pi->stat) ||
+	     !uh_file_if_unmodified_since(cl, &pi->stat) ||
+	     !uh_file_if_none_match(cl, &pi->stat))) {
 		ustream_printf(cl->us, "\r\n");
 		uh_request_done(cl);
 		close(fd);
