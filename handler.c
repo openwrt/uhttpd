@@ -103,6 +103,24 @@ handle_set_uri(struct json_script_ctx *ctx, struct blob_attr *data)
 }
 
 static void
+handle_add_header(struct json_script_ctx *ctx, struct blob_attr *data)
+{
+	struct client *cl = cur_client;
+	static struct blobmsg_policy policy[2] = {
+		 { .type = BLOBMSG_TYPE_STRING },
+		 { .type = BLOBMSG_TYPE_STRING },
+	};
+	struct blob_attr *tb[2];
+
+	blobmsg_parse_array(policy, ARRAY_SIZE(tb), tb, blobmsg_data(data), blobmsg_data_len(data));
+	if (!tb[0] || !tb[1])
+		return;
+
+	blobmsg_add_string(&cl->hdr_response, blobmsg_get_string(tb[0]),
+			   blobmsg_get_string(tb[1]));
+}
+
+static void
 handle_command(struct json_script_ctx *ctx, const char *name,
 	       struct blob_attr *data, struct blob_attr *vars)
 {
@@ -111,7 +129,8 @@ handle_command(struct json_script_ctx *ctx, const char *name,
 		void (*func)(struct json_script_ctx *ctx, struct blob_attr *data);
 	} cmds[] = {
 		{ "redirect", handle_redirect },
-		{ "rewrite", handle_set_uri }
+		{ "rewrite", handle_set_uri },
+		{ "add-header", handle_add_header },
 	};
 	int i;
 

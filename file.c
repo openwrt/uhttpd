@@ -863,6 +863,7 @@ void uh_handle_request(struct client *cl)
 	char *url = blobmsg_data(blob_data(cl->hdr.head));
 	char *error_handler;
 
+	blob_buf_init(&cl->hdr_response, 0);
 	url = uh_handle_alias(url);
 
 	uh_handler_run(cl, &url, false);

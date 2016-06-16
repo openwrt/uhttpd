@@ -258,6 +258,7 @@ struct client {
 	struct uh_addr srv_addr, peer_addr;
 
 	struct blob_buf hdr;
+	struct blob_buf hdr_response;
 	struct dispatch dispatch;
 };
 

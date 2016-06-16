@@ -45,8 +45,10 @@ const char * const http_methods[] = {
 void uh_http_header(struct client *cl, int code, const char *summary)
 {
 	struct http_request *r = &cl->request;
+	struct blob_attr *cur;
 	const char *enc = "Transfer-Encoding: chunked\r\n";
 	const char *conn;
+	int rem;
 
 	cl->http_code = code;
 
@@ -64,6 +66,10 @@ void uh_http_header(struct client *cl, int code, const char *summary)
 
 	if (!r->connection_close)
 		ustream_printf(cl->us, "Keep-Alive: timeout=%d\r\n", conf.http_keepalive);
+
+	blobmsg_for_each_attr(cur, cl->hdr_response.head, rem)
+		ustream_printf(cl->us, "%s: %s\r\n", blobmsg_name(cur),
+			       blobmsg_get_string(cur));
 }
 
 static void uh_connection_close(struct client *cl)
@@ -114,6 +120,7 @@ void uh_request_done(struct client *cl)
 {
 	uh_chunk_eof(cl);
 	uh_dispatch_done(cl);
+	blob_buf_init(&cl->hdr_response, 0);
 	memset(&cl->dispatch, 0, sizeof(cl->dispatch));
 
 	if (!conf.http_keepalive || cl->request.connection_close)
@@ -530,6 +537,7 @@ static void client_close(struct client *cl)
 	close(cl->sfd.fd.fd);
 	list_del(&cl->list);
 	blob_buf_free(&cl->hdr);
+	blob_buf_free(&cl->hdr_response);
 	free(cl);
 
 	uh_unblock_listeners();
