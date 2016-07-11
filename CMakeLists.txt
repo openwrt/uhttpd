@@ -21,6 +21,9 @@ IF(LIBS STREQUAL "LIBS-NOTFOUND")
 	SET(LIBS "")
 ENDIF()
 
+FIND_PATH(ubox_include_dir libubox/usock.h)
+INCLUDE_DIRECTORIES(${ubox_include_dir})
+
 SET(SOURCES main.c listen.c client.c utils.c file.c auth.c cgi.c relay.c proc.c plugin.c handler.c)
 IF(TLS_SUPPORT)
 	SET(SOURCES ${SOURCES} tls.c)
