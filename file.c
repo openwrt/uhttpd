@@ -879,9 +879,14 @@ void uh_handle_request(struct client *cl)
 	if (__handle_file_request(cl, url))
 		return;
 
-	if (uh_handler_run(cl, &url, true) &&
-	    (!url || __handle_file_request(cl, url)))
-		return;
+	if (uh_handler_run(cl, &url, true)) {
+		if (!url)
+			return;
+
+		uh_handler_run(cl, &url, false);
+		if (__handle_file_request(cl, url))
+			return;
+	}
 
 	req->redirect_status = 404;
 	if (conf.error_handler) {
