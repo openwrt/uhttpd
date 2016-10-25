@@ -222,6 +222,10 @@ static void lua_main(struct client *cl, struct path_info *pi, char *url)
 			pi->query = str + 1;
 		path_len = str - url;
 	}
+
+	if (prefix_len > 0 && conf.lua_prefix[prefix_len - 1] == '/')
+		prefix_len--;
+
 	if (path_len > prefix_len) {
 		lua_pushlstring(L, url + prefix_len,
 				path_len - prefix_len);
