@@ -208,6 +208,10 @@ bool uh_path_match(const char *prefix, const char *url)
 {
 	int len = strlen(prefix);
 
+	/* A prefix of "/" will - by definition - match any url */
+	if (prefix[0] == '/' && len == 1)
+		return true;
+
 	if (strncmp(url, prefix, len) != 0)
 		return false;
 
