@@ -107,15 +107,17 @@ void uh_setup_listeners(void)
 		/* TCP keep-alive */
 		if (conf.tcp_keepalive > 0) {
 #ifdef linux
-			int tcp_ka_idl, tcp_ka_int, tcp_ka_cnt;
+			int tcp_ka_idl, tcp_ka_int, tcp_ka_cnt, tcp_fstopn;
 
 			tcp_ka_idl = 1;
 			tcp_ka_cnt = 3;
 			tcp_ka_int = conf.tcp_keepalive;
+			tcp_fstopn = 5;
 
 			setsockopt(sock, SOL_TCP, TCP_KEEPIDLE,  &tcp_ka_idl, sizeof(tcp_ka_idl));
 			setsockopt(sock, SOL_TCP, TCP_KEEPINTVL, &tcp_ka_int, sizeof(tcp_ka_int));
 			setsockopt(sock, SOL_TCP, TCP_KEEPCNT,   &tcp_ka_cnt, sizeof(tcp_ka_cnt));
+			setsockopt(sock, SOL_TCP, TCP_FASTOPEN,  &tcp_fstopn, sizeof(tcp_fstopn));
 #endif
 
 			setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(yes));
