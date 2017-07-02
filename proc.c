@@ -34,7 +34,9 @@
 	__header(user_agent, user-agent) \
 	__header(content_type, content-type) \
 	__header(content_length, content-length) \
-	__header(x_http_method_override, x-http-method-override)
+	__header(x_http_method_override, x-http-method-override) \
+	__header(http_auth_user, http-auth-user) \
+	__header(http_auth_pass, http-auth-pass)
 
 #undef __header
 #define __header __enum_header
@@ -64,6 +66,8 @@ static const struct {
 	{ "HTTP_REFERER", HDR_referer },
 	{ "HTTP_USER_AGENT", HDR_user_agent },
 	{ "HTTP_X_HTTP_METHOD_OVERRIDE", HDR_x_http_method_override },
+	{ "HTTP_AUTH_USER", HDR_http_auth_user },
+	{ "HTTP_AUTH_PASS", HDR_http_auth_pass },
 	{ "CONTENT_TYPE", HDR_content_type },
 	{ "CONTENT_LENGTH", HDR_content_length },
 };
