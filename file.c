@@ -795,6 +795,7 @@ static bool __handle_file_request(struct client *cl, char *url)
 	struct dispatch_handler *d;
 	struct blob_attr *tb[__HDR_MAX];
 	struct path_info *pi;
+	char *user, *pass;
 
 	pi = uh_path_lookup(cl, url);
 	if (!pi)
@@ -804,11 +805,15 @@ static bool __handle_file_request(struct client *cl, char *url)
 		return true;
 
 	blobmsg_parse(hdr_policy, __HDR_MAX, tb, blob_data(cl->hdr.head), blob_len(cl->hdr.head));
-	if (tb[HDR_AUTHORIZATION])
-		pi->auth = blobmsg_data(tb[HDR_AUTHORIZATION]);
+	if (tb[HDR_AUTHORIZATION]) {
+		if (!uh_auth_check(cl, pi->name, blobmsg_data(tb[HDR_AUTHORIZATION]), &user, &pass))
+			return true;
 
-	if (!uh_auth_check(cl, pi))
-		return true;
+		if (user && pass) {
+			blobmsg_add_string(&cl->hdr, "http-auth-user", user);
+			blobmsg_add_string(&cl->hdr, "http-auth-pass", pass);
+		}
+	}
 
 	d = dispatch_find(url, pi);
 	if (d)

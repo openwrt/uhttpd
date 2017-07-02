@@ -73,7 +73,8 @@ void uh_auth_add(const char *path, const char *user, const char *pass)
 	list_add(&new->list, &auth_realms);
 }
 
-bool uh_auth_check(struct client *cl, struct path_info *pi)
+bool uh_auth_check(struct client *cl, const char *path, const char *auth,
+                   char **uptr, char **pptr)
 {
 	struct http_request *req = &cl->request;
 	struct auth_realm *realm;
@@ -82,8 +83,14 @@ bool uh_auth_check(struct client *cl, struct path_info *pi)
 	char *pass = NULL;
 	int plen;
 
-	if (pi->auth && !strncasecmp(pi->auth, "Basic ", 6)) {
-		const char *auth = pi->auth + 6;
+	if (uptr)
+		*uptr = NULL;
+
+	if (pptr)
+		*pptr = NULL;
+
+	if (auth && !strncasecmp(auth, "Basic ", 6)) {
+		auth += 6;
 
 		uh_b64decode(uh_buf, sizeof(uh_buf), auth, strlen(auth));
 		pass = strchr(uh_buf, ':');
@@ -94,14 +101,14 @@ bool uh_auth_check(struct client *cl, struct path_info *pi)
 	}
 
 	req->realm = NULL;
-	plen = strlen(pi->name);
+	plen = strlen(path);
 	list_for_each_entry(realm, &auth_realms, list) {
 		int rlen = strlen(realm->path);
 
 		if (plen < rlen)
 			continue;
 
-		if (strncasecmp(pi->name, realm->path, rlen) != 0)
+		if (strncasecmp(path, realm->path, rlen) != 0)
 			continue;
 
 		req->realm = realm;
@@ -120,8 +127,15 @@ bool uh_auth_check(struct client *cl, struct path_info *pi)
 
 	if (user_match &&
 	    (!strcmp(pass, realm->pass) ||
-	     !strcmp(crypt(pass, realm->pass), realm->pass)))
+	     !strcmp(crypt(pass, realm->pass), realm->pass))) {
+		if (uptr)
+			*uptr = user;
+
+		if (pptr)
+			*pptr = pass;
+
 		return true;
+	}
 
 	uh_http_header(cl, 401, "Authorization Required");
 	ustream_printf(cl->us,

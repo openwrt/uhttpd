@@ -300,7 +300,8 @@ void uh_client_read_cb(struct client *cl);
 void uh_client_notify_state(struct client *cl);
 
 void uh_auth_add(const char *path, const char *user, const char *pass);
-bool uh_auth_check(struct client *cl, struct path_info *pi);
+bool uh_auth_check(struct client *cl, const char *path, const char *auth,
+                   char **uptr, char **pptr);
 
 void uh_close_listen_fds(void);
 void uh_close_fds(void);
