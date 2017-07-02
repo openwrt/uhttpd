@@ -162,7 +162,7 @@ struct env_var *uh_get_process_vars(struct client *cl, struct path_info *pi)
 
 		cur = tb[proc_header_env[i].idx];
 		vars[i].name = proc_header_env[i].name;
-		vars[i].value = cur ? blobmsg_data(cur) : "";
+		vars[i].value = cur ? blobmsg_data(cur) : NULL;
 	}
 
 	memcpy(&vars[i], extra_vars, sizeof(extra_vars));
