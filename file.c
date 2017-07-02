@@ -734,14 +734,13 @@ static int field_len(const char *ptr)
 	_field(phys) \
 	_field(name) \
 	_field(info) \
-	_field(query) \
-	_field(auth)
+	_field(query)
 
 static void
 uh_defer_script(struct client *cl, struct dispatch_handler *d, struct path_info *pi)
 {
 	struct deferred_request *dr;
-	char *_root, *_phys, *_name, *_info, *_query, *_auth;
+	char *_root, *_phys, *_name, *_info, *_query;
 
 	cl->dispatch.req_free = uh_free_pending_request;
 
