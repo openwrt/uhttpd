@@ -132,6 +132,7 @@ uh_path_lookup(struct client *cl, const char *url)
 {
 	static char path_phys[PATH_MAX];
 	static char path_info[PATH_MAX];
+	static char path_query[PATH_MAX];
 	static struct path_info p;
 
 	const char *docroot = conf.docroot;
@@ -156,7 +157,11 @@ uh_path_lookup(struct client *cl, const char *url)
 
 	/* separate query string from url */
 	if ((pathptr = strchr(url, '?')) != NULL) {
-		p.query = pathptr[1] ? pathptr + 1 : NULL;
+		if (pathptr[1]) {
+			p.query = path_query;
+			snprintf(path_query, sizeof(path_query), "%s",
+				 pathptr + 1);
+		}
 
 		/* urldecode component w/o query */
 		if (pathptr > url) {
