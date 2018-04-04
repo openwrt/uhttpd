@@ -265,7 +265,6 @@ static void proc_write_cb(struct uloop_fd *fd, unsigned int events)
 	struct client *cl = container_of(fd, struct client, dispatch.proc.wrfd);
 
 	client_poll_post_data(cl);
-	cl->dispatch.data_blocked = false;
 }
 
 static void proc_relay_write_cb(struct client *cl)
@@ -292,10 +291,8 @@ static int proc_data_send(struct client *cl, const char *data, int len)
 			if (errno == EINTR)
 				continue;
 
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				cl->dispatch.data_blocked = true;
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
 				break;
-			}
 
 			/* consume all data */
 			ret = len;
@@ -369,7 +366,6 @@ bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
 
 	proc->wrfd.fd = wfd[1];
 	uh_relay_open(cl, &proc->r, rfd[0], pid);
-	uloop_fd_add(&proc->wrfd, ULOOP_WRITE);
 
 	d->free = proc_free;
 	d->close_fds = proc_close_fds;
