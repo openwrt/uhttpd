@@ -249,3 +249,45 @@ bool uh_addr_rfc1918(struct uh_addr *addr)
 
 	return 0;
 }
+
+
+static bool is_html_special_char(char c)
+{
+	switch (c)
+	{
+	case 0x22:
+	case 0x26:
+	case 0x27:
+	case 0x3C:
+	case 0x3E:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+char *uh_htmlescape(const char *str)
+{
+	size_t len;
+	char *p, *copy;
+
+	for (p = str, len = 1; *p; p++)
+		if (is_html_special_char(*p))
+			len += 6; /* &#x??; */
+		else
+			len++;
+
+	copy = calloc(1, len);
+
+	if (!copy)
+		return NULL;
+
+	for (p = copy; *str; str++)
+		if (is_html_special_char(*str))
+			p += sprintf(p, "&#x%02x;", (unsigned int)*str);
+		else
+			*p++ = *str;
+
+	return copy;
+}
