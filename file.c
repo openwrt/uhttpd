@@ -476,6 +476,7 @@ static void list_entries(struct client *cl, struct dirent **files, int count,
 	const char *type = "directory";
 	unsigned int mode = S_IXOTH;
 	struct stat s;
+	char *escaped;
 	char *file;
 	char buf[128];
 	int i;
@@ -501,16 +502,22 @@ static void list_entries(struct client *cl, struct dirent **files, int count,
 		if (!(s.st_mode & mode))
 			goto next;
 
+		escaped = uh_htmlescape(name);
+
+		if (!escaped)
+			goto next;
+
 		uh_chunk_printf(cl,
 				"<li><strong><a href='%s%s%s'>%s</a>%s"
 				"</strong><br /><small>modified: %s"
 				"<br />%s - %.02f kbyte<br />"
 				"<br /></small></li>",
-				path, name, suffix,
-				name, suffix,
+				path, escaped, suffix,
+				escaped, suffix,
 				uh_file_unix2date(s.st_mtime, buf, sizeof(buf)),
 				type, s.st_size / 1024.0);
 
+		free(escaped);
 		*file = 0;
 next:
 		free(files[i]);
@@ -520,7 +527,14 @@ next:
 static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 {
 	struct dirent **files = NULL;
+	char *escaped_path = uh_htmlescape(pi->name);
 	int count = 0;
+
+	if (!escaped_path)
+	{
+		uh_client_error(cl, 500, "Internal Server Error", "Out of memory");
+		return;
+	}
 
 	uh_file_response_200(cl, NULL);
 	ustream_printf(cl->us, "Content-Type: text/html\r\n\r\n");
@@ -528,13 +542,14 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 	uh_chunk_printf(cl,
 		"<html><head><title>Index of %s</title></head>"
 		"<body><h1>Index of %s</h1><hr /><ol>",
-		pi->name, pi->name);
+		escaped_path, escaped_path);
 
 	count = scandir(pi->phys, &files, NULL, dirent_cmp);
 	if (count > 0) {
 		strcpy(uh_buf, pi->phys);
-		list_entries(cl, files, count, pi->name, uh_buf);
+		list_entries(cl, files, count, escaped_path, uh_buf);
 	}
+	free(escaped_path);
 	free(files);
 
 	uh_chunk_printf(cl, "</ol><hr /></body></html>");
@@ -613,7 +628,7 @@ static void uh_file_request(struct client *cl, const char *url,
 {
 	int fd;
 	struct http_request *req = &cl->request;
-	char *error_handler;
+	char *error_handler, *escaped_url;
 
 	if (!(pi->stat.st_mode & S_IROTH))
 		goto error;
@@ -649,9 +664,14 @@ error:
 			return;
 	}
 
+	escaped_url = uh_htmlescape(url);
+
 	uh_client_error(cl, 403, "Forbidden",
 			"You don't have permission to access %s on this server.",
-			url);
+			escaped_url ? escaped_url : "the url");
+
+	if (escaped_url)
+		free(escaped_url);
 }
 
 void uh_dispatch_add(struct dispatch_handler *d)
@@ -872,7 +892,7 @@ void uh_handle_request(struct client *cl)
 	struct http_request *req = &cl->request;
 	struct dispatch_handler *d;
 	char *url = blobmsg_data(blob_data(cl->hdr.head));
-	char *error_handler;
+	char *error_handler, *escaped_url;
 
 	blob_buf_init(&cl->hdr_response, 0);
 	url = uh_handle_alias(url);
@@ -906,5 +926,11 @@ void uh_handle_request(struct client *cl)
 			return;
 	}
 
-	uh_client_error(cl, 404, "Not Found", "The requested URL %s was not found on this server.", url);
+	escaped_url = uh_htmlescape(url);
+
+	uh_client_error(cl, 404, "Not Found", "The requested URL %s was not found on this server.",
+	                escaped_url ? escaped_url : "");
+
+	if (escaped_url)
+		free(escaped_url);
 }

@@ -269,11 +269,11 @@ static bool is_html_special_char(char c)
 
 char *uh_htmlescape(const char *str)
 {
-	size_t len;
+	size_t i, len;
 	char *p, *copy;
 
-	for (p = str, len = 1; *p; p++)
-		if (is_html_special_char(*p))
+	for (i = 0, len = 1; str[i]; i++)
+		if (is_html_special_char(str[i]))
 			len += 6; /* &#x??; */
 		else
 			len++;
@@ -283,11 +283,11 @@ char *uh_htmlescape(const char *str)
 	if (!copy)
 		return NULL;
 
-	for (p = copy; *str; str++)
-		if (is_html_special_char(*str))
-			p += sprintf(p, "&#x%02x;", (unsigned int)*str);
+	for (i = 0, p = copy; str[i]; i++)
+		if (is_html_special_char(str[i]))
+			p += sprintf(p, "&#x%02x;", (unsigned int)str[i]);
 		else
-			*p++ = *str;
+			*p++ = str[i];
 
 	return copy;
 }
