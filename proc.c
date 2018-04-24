@@ -30,6 +30,7 @@
 	__header(connection, connection) \
 	__header(cookie, cookie) \
 	__header(host, host) \
+	__header(origin, origin) \
 	__header(referer, referer) \
 	__header(user_agent, user-agent) \
 	__header(content_type, content-type) \
@@ -63,6 +64,7 @@ static const struct {
 	{ "HTTP_CONNECTION", HDR_connection },
 	{ "HTTP_COOKIE", HDR_cookie },
 	{ "HTTP_HOST", HDR_host },
+	{ "HTTP_ORIGIN", HDR_origin },
 	{ "HTTP_REFERER", HDR_referer },
 	{ "HTTP_USER_AGENT", HDR_user_agent },
 	{ "HTTP_X_HTTP_METHOD_OVERRIDE", HDR_x_http_method_override },
