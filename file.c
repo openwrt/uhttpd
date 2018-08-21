@@ -357,6 +357,11 @@ static void uh_file_response_304(struct client *cl, struct stat *s)
 	return uh_file_response_ok_hdrs(cl, s);
 }
 
+static void uh_file_response_405(struct client *cl)
+{
+	uh_http_header(cl, 405, "Method Not Allowed");
+}
+
 static void uh_file_response_412(struct client *cl)
 {
 	uh_http_header(cl, 412, "Precondition Failed");
@@ -629,6 +634,20 @@ static void uh_file_request(struct client *cl, const char *url,
 	int fd;
 	struct http_request *req = &cl->request;
 	char *error_handler, *escaped_url;
+
+	switch (cl->request.method) {
+	case UH_HTTP_MSG_GET:
+	case UH_HTTP_MSG_POST:
+	case UH_HTTP_MSG_HEAD:
+	case UH_HTTP_MSG_OPTIONS:
+		break;
+
+	default:
+		uh_file_response_405(cl);
+		ustream_printf(cl->us, "\r\n");
+		uh_request_done(cl);
+		return;
+	}
 
 	if (!(pi->stat.st_mode & S_IROTH))
 		goto error;

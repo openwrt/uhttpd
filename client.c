@@ -40,6 +40,9 @@ const char * const http_methods[] = {
 	[UH_HTTP_MSG_POST] = "POST",
 	[UH_HTTP_MSG_HEAD] = "HEAD",
 	[UH_HTTP_MSG_OPTIONS] = "OPTIONS",
+	[UH_HTTP_MSG_PUT] = "PUT",
+	[UH_HTTP_MSG_PATCH] = "PATCH",
+	[UH_HTTP_MSG_DELETE] = "DELETE",
 };
 
 void uh_http_header(struct client *cl, int code, const char *summary)

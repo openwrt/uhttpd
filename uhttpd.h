@@ -92,6 +92,9 @@ enum http_method {
 	UH_HTTP_MSG_POST,
 	UH_HTTP_MSG_HEAD,
 	UH_HTTP_MSG_OPTIONS,
+	UH_HTTP_MSG_PUT,
+	UH_HTTP_MSG_PATCH,
+	UH_HTTP_MSG_DELETE,
 };
 
 enum http_version {
