@@ -139,7 +139,7 @@ static int uh_lua_urlencode(lua_State *L)
 	return uh_lua_strconvert(L, ops->urlencode);
 }
 
-static lua_State *uh_lua_state_init(void)
+static lua_State *uh_lua_state_init(struct lua_prefix *lua)
 {
 	const char *msg = "(unknown error)";
 	const char *status;
@@ -172,7 +172,7 @@ static lua_State *uh_lua_state_init(void)
 
 	lua_setglobal(L, "uhttpd");
 
-	ret = luaL_loadfile(L, conf.lua_handler);
+	ret = luaL_loadfile(L, lua->handler);
 	if (ret) {
 		status = "loading";
 		goto error;
@@ -186,9 +186,12 @@ static lua_State *uh_lua_state_init(void)
 
 	lua_getglobal(L, UH_LUA_CB);
 	if (!lua_isfunction(L, -1)) {
-		fprintf(stderr, "Error: Lua handler provides no " UH_LUA_CB "() callback.\n");
+		fprintf(stderr, "Error: Lua handler %s provides no "
+		                UH_LUA_CB "() callback.\n", lua->handler);
 		exit(1);
 	}
+
+	lua->ctx = L;
 
 	return L;
 
@@ -196,7 +199,8 @@ error:
 	if (!lua_isnil(L, -1))
 		msg = lua_tostring(L, -1);
 
-	fprintf(stderr, "Error %s Lua handler: %s\n", status, msg);
+	fprintf(stderr, "Error %s %s Lua handler: %s\n",
+	        status, lua->handler, msg);
 	exit(1);
 	return NULL;
 }
@@ -216,7 +220,7 @@ static void lua_main(struct client *cl, struct path_info *pi, char *url)
 	/* new env table for this request */
 	lua_newtable(L);
 
-	prefix_len = strlen(conf.lua_prefix);
+	prefix_len = strlen(pi->name);
 	path_len = strlen(url);
 	str = strchr(url, '?');
 	if (str) {
@@ -225,7 +229,7 @@ static void lua_main(struct client *cl, struct path_info *pi, char *url)
 		path_len = str - url;
 	}
 
-	if (prefix_len > 0 && conf.lua_prefix[prefix_len - 1] == '/')
+	if (prefix_len > 0 && pi->name[prefix_len - 1] == '/')
 		prefix_len--;
 
 	if (path_len > prefix_len) {
@@ -269,21 +273,41 @@ static void lua_main(struct client *cl, struct path_info *pi, char *url)
 
 static void lua_handle_request(struct client *cl, char *url, struct path_info *pi)
 {
+	struct lua_prefix *p;
 	static struct path_info _pi;
 
-	pi = &_pi;
-	pi->name = conf.lua_prefix;
-	pi->phys = conf.lua_handler;
+	list_for_each_entry(p, &conf.lua_prefix, list) {
+		if (!ops->path_match(p->prefix, url))
+			continue;
 
-	if (!ops->create_process(cl, pi, url, lua_main)) {
-		ops->client_error(cl, 500, "Internal Server Error",
-				  "Failed to create CGI process: %s", strerror(errno));
+		pi = &_pi;
+		pi->name = p->prefix;
+		pi->phys = p->handler;
+
+		_L = p->ctx;
+
+		if (!ops->create_process(cl, pi, url, lua_main)) {
+			ops->client_error(cl, 500, "Internal Server Error",
+			                  "Failed to create CGI process: %s",
+			                  strerror(errno));
+		}
+
+		return;
 	}
+
+	ops->client_error(cl, 500, "Internal Server Error",
+	                  "Failed to lookup matching handler");
 }
 
 static bool check_lua_url(const char *url)
 {
-	return ops->path_match(conf.lua_prefix, url);
+	struct lua_prefix *p;
+
+	list_for_each_entry(p, &conf.lua_prefix, list)
+		if (ops->path_match(p->prefix, url))
+			return true;
+
+	return false;
 }
 
 static struct dispatch_handler lua_dispatch = {
@@ -294,9 +318,14 @@ static struct dispatch_handler lua_dispatch = {
 
 static int lua_plugin_init(const struct uhttpd_ops *o, struct config *c)
 {
+	struct lua_prefix *p;
+
 	ops = o;
 	_conf = c;
-	_L = uh_lua_state_init();
+
+	list_for_each_entry(p, &conf.lua_prefix, list)
+		uh_lua_state_init(p);
+
 	ops->dispatch_add(&lua_dispatch);
 	return 0;
 }

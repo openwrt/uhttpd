@@ -52,6 +52,13 @@ struct alias {
 	char *path;
 };
 
+struct lua_prefix {
+	struct list_head list;
+	const char *handler;
+	const char *prefix;
+	void *ctx;
+};
+
 struct config {
 	const char *docroot;
 	const char *realm;
@@ -60,8 +67,6 @@ struct config {
 	const char *cgi_prefix;
 	const char *cgi_docroot_path;
 	const char *cgi_path;
-	const char *lua_handler;
-	const char *lua_prefix;
 	const char *ubus_prefix;
 	const char *ubus_socket;
 	int no_symlinks;
@@ -78,6 +83,7 @@ struct config {
 	int ubus_cors;
 	int cgi_prefix_len;
 	struct list_head cgi_alias;
+	struct list_head lua_prefix;
 };
 
 struct auth_realm {

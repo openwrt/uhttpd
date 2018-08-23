@@ -31,6 +31,7 @@
 #include <signal.h>
 
 #include <libubox/usock.h>
+#include <libubox/utils.h>
 
 #include "uhttpd.h"
 #include "tls.h"
@@ -180,6 +181,7 @@ static void init_defaults_pre(void)
 	conf.cgi_prefix = "/cgi-bin";
 	conf.cgi_path = "/sbin:/usr/sbin:/bin:/usr/bin";
 	INIT_LIST_HEAD(&conf.cgi_alias);
+	INIT_LIST_HEAD(&conf.lua_prefix);
 }
 
 static void init_defaults_post(void)
@@ -214,6 +216,23 @@ static void fixup_prefix(char *str)
 	str[len + 1] = 0;
 }
 
+static void add_lua_prefix(const char *prefix, const char *handler) {
+	struct lua_prefix *p;
+	char *pprefix, *phandler;
+
+	p = calloc_a(sizeof(*p),
+	             &pprefix, strlen(prefix) + 1,
+	             &phandler, strlen(handler) + 1);
+
+	if (!p)
+		return;
+
+	p->prefix = strcpy(pprefix, prefix);
+	p->handler = strcpy(phandler, handler);
+
+	list_add_tail(&p->list, &conf.lua_prefix);
+}
+
 int main(int argc, char **argv)
 {
 	struct alias *alias;
@@ -225,6 +244,9 @@ int main(int argc, char **argv)
 #ifdef HAVE_TLS
 	int n_tls = 0;
 	const char *tls_key = NULL, *tls_crt = NULL;
+#endif
+#ifdef HAVE_LUA
+	const char *lua_prefix = NULL, *lua_handler = NULL;
 #endif
 
 	BUILD_BUG_ON(sizeof(uh_buf) < PATH_MAX);
@@ -410,11 +432,28 @@ int main(int argc, char **argv)
 
 #ifdef HAVE_LUA
 		case 'l':
-			conf.lua_prefix = optarg;
-			break;
-
 		case 'L':
-			conf.lua_handler = optarg;
+			if (ch == 'l') {
+				if (lua_prefix)
+					fprintf(stderr, "uhttpd: Ignoring previous -%c %s\n",
+					        ch, lua_prefix);
+
+				lua_prefix = optarg;
+			}
+			else {
+				if (lua_handler)
+					fprintf(stderr, "uhttpd: Ignoring previous -%c %s\n",
+					        ch, lua_handler);
+
+				lua_handler = optarg;
+			}
+
+			if (lua_prefix && lua_handler) {
+				add_lua_prefix(lua_prefix, lua_handler);
+				lua_prefix = NULL;
+				lua_handler = NULL;
+			}
+
 			break;
 #else
 		case 'l':
@@ -484,14 +523,13 @@ int main(int argc, char **argv)
 #endif
 
 #ifdef HAVE_LUA
-	if (conf.lua_handler || conf.lua_prefix) {
-		if (!conf.lua_handler || !conf.lua_prefix) {
-			fprintf(stderr, "Need handler and prefix to enable Lua support\n");
-			return 1;
-		}
-		if (uh_plugin_init("uhttpd_lua.so"))
-			return 1;
+	if (lua_handler || lua_prefix) {
+		fprintf(stderr, "Need handler and prefix to enable Lua support\n");
+		return 1;
 	}
+
+	if (!list_empty(&conf.lua_prefix) && uh_plugin_init("uhttpd_lua.so"))
+		return 1;
 #endif
 #ifdef HAVE_UBUS
 	if (conf.ubus_prefix && uh_plugin_init("uhttpd_ubus.so"))
