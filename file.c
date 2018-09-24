@@ -19,7 +19,7 @@
 
 #ifndef _DEFAULT_SOURCE
 # define _DEFAULT_SOURCE
-#define
+#endif
 
 #define _BSD_SOURCE
 #define _DARWIN_C_SOURCE
