@@ -220,6 +220,7 @@ static void fixup_prefix(char *str)
 	str[len + 1] = 0;
 }
 
+#ifdef HAVE_LUA
 static void add_lua_prefix(const char *prefix, const char *handler) {
 	struct lua_prefix *p;
 	char *pprefix, *phandler;
@@ -236,6 +237,7 @@ static void add_lua_prefix(const char *prefix, const char *handler) {
 
 	list_add_tail(&p->list, &conf.lua_prefix);
 }
+#endif
 
 int main(int argc, char **argv)
 {

@@ -557,11 +557,13 @@ void uh_client_notify_state(struct client *cl)
 		if (!s->eof || s->w.data_bytes)
 			return;
 
+#ifdef HAVE_TLS
 		if (cl->tls && cl->ssl.conn && cl->ssl.conn->w.data_bytes) {
 			cl->ssl.conn->eof = s->eof;
 			if (!ustream_write_pending(cl->ssl.conn))
 				return;
 		}
+#endif
 	}
 
 	return client_close(cl);
