@@ -165,6 +165,7 @@ static int usage(const char *name)
 		"	-t seconds      CGI, Lua and UBUS script timeout in seconds, default is 60\n"
 		"	-T seconds      Network timeout in seconds, default is 30\n"
 		"	-k seconds      HTTP keepalive timeout\n"
+		"	-A seconds      TCP keepalive timeout, default is unset\n"
 		"	-d string       URL decode given string\n"
 		"	-r string       Specify basic auth realm\n"
 		"	-m string       MD5 crypt given string\n"
