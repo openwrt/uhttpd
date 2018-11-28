@@ -67,11 +67,18 @@ static void cgi_main(struct client *cl, struct path_info *pi, char *url)
 static void cgi_handle_request(struct client *cl, char *url, struct path_info *pi)
 {
 	unsigned int mode = S_IFREG | S_IXOTH;
+	char *escaped_url;
 
 	if (!pi->ip && !((pi->stat.st_mode & mode) == mode)) {
+		escaped_url = uh_htmlescape(url);
+
 		uh_client_error(cl, 403, "Forbidden",
 				"You don't have permission to access %s on this server.",
-				url);
+				escaped_url ? escaped_url : "the url");
+
+		if (escaped_url)
+			free(escaped_url);
+
 		return;
 	}
 
