@@ -47,7 +47,7 @@ void uh_chunk_write(struct client *cl, const void *data, int len)
 		ustream_printf(cl->us, "%X\r\n", len);
 	ustream_write(cl->us, data, len, true);
 	if (chunked)
-		ustream_printf(cl->us, "\r\n", len);
+		ustream_printf(cl->us, "\r\n");
 }
 
 void uh_chunk_vprintf(struct client *cl, const char *format, va_list arg)
@@ -74,7 +74,7 @@ void uh_chunk_vprintf(struct client *cl, const char *format, va_list arg)
 		ustream_write(cl->us, buf, len, true);
 	else
 		ustream_vprintf(cl->us, format, arg);
-	ustream_printf(cl->us, "\r\n", len);
+	ustream_printf(cl->us, "\r\n");
 }
 
 void uh_chunk_printf(struct client *cl, const char *format, ...)

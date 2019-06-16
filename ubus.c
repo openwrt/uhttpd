@@ -144,11 +144,11 @@ static void uh_ubus_add_cors_headers(struct client *cl)
 	}
 
 	ustream_printf(cl->us, "Access-Control-Allow-Origin: %s\r\n",
-	               blobmsg_data(tb[HDR_ORIGIN]));
+	               blobmsg_get_string(tb[HDR_ORIGIN]));
 
 	if (tb[HDR_ACCESS_CONTROL_REQUEST_HEADERS])
 		ustream_printf(cl->us, "Access-Control-Allow-Headers: %s\r\n",
-		               blobmsg_data(tb[HDR_ACCESS_CONTROL_REQUEST_HEADERS]));
+		               blobmsg_get_string(tb[HDR_ACCESS_CONTROL_REQUEST_HEADERS]));
 
 	ustream_printf(cl->us, "Access-Control-Allow-Methods: POST, OPTIONS\r\n");
 	ustream_printf(cl->us, "Access-Control-Allow-Credentials: true\r\n");
