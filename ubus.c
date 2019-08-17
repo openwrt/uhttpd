@@ -34,7 +34,7 @@ static struct config *_conf;
 static struct ubus_context *ctx;
 static struct blob_buf buf;
 
-#define UH_UBUS_MAX_POST_SIZE	4096
+#define UH_UBUS_MAX_POST_SIZE	65536
 #define UH_UBUS_DEFAULT_SID	"00000000000000000000000000000000"
 
 enum {
