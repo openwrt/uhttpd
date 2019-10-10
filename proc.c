@@ -225,11 +225,9 @@ static void proc_handle_header(struct relay *r, const char *name, const char *va
 static void proc_handle_header_end(struct relay *r)
 {
 	struct client *cl = r->cl;
-	struct dispatch_proc *p = &cl->dispatch.proc;
 	struct blob_attr *cur;
 	int rem;
 
-	uloop_timeout_cancel(&p->timeout);
 	uh_http_header(cl, cl->dispatch.proc.status_code, cl->dispatch.proc.status_msg);
 	blob_for_each_attr(cur, cl->dispatch.proc.hdr.head, rem)
 		ustream_printf(cl->us, "%s: %s\r\n", blobmsg_name(cur),
