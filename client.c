@@ -346,7 +346,7 @@ static void client_parse_header(struct client *cl, char *data)
 		}
 	} else if (!strcmp(data, "content-length")) {
 		r->content_length = strtoul(val, &err, 0);
-		if (err && *err) {
+		if ((err && *err) || r->content_length < 0) {
 			uh_header_error(cl, 400, "Bad Request");
 			return;
 		}
@@ -444,7 +444,7 @@ void client_poll_post_data(struct client *cl)
 		ustream_consume(cl->us, sep + 2 - buf);
 
 		/* invalid chunk length */
-		if (sep && *sep) {
+		if ((sep && *sep) || r->content_length < 0) {
 			r->content_length = 0;
 			r->transfer_chunked = 0;
 			break;
