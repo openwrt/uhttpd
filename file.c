@@ -753,6 +753,7 @@ static void uh_complete_request(struct client *cl)
 		cl->dispatch.data_blocked = false;
 		uh_invoke_script(cl, dr->d, dr->path ? &dr->pi : NULL);
 		client_poll_post_data(cl);
+		ustream_poll(cl->us);
 	}
 }
 
