@@ -31,7 +31,7 @@ static struct ustream_ssl_ops *ops;
 static void *dlh;
 static void *ctx;
 
-int uh_tls_init(const char *key, const char *crt)
+int uh_tls_init(const char *key, const char *crt, const char *ciphers)
 {
 	static bool _init = false;
 
@@ -60,6 +60,11 @@ int uh_tls_init(const char *key, const char *crt)
 	if (ops->context_set_crt_file(ctx, crt) ||
 	    ops->context_set_key_file(ctx, key)) {
 		fprintf(stderr, "Failed to load certificate/key files\n");
+		return -EINVAL;
+	}
+
+	if (ciphers && ops->context_set_ciphers(ctx, ciphers)) {
+		fprintf(stderr, "No recognized ciphers in cipher list\n");
 		return -EINVAL;
 	}
 

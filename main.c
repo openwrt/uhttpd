@@ -139,6 +139,7 @@ static int usage(const char *name)
 		"	-s [addr:]port  Like -p but provide HTTPS on this port\n"
 		"	-C file         ASN.1 server certificate file\n"
 		"	-K file         ASN.1 server private key file\n"
+		"	-P ciphers      Colon separated list of allowed TLS ciphers\n"
 		"	-q              Redirect all HTTP requests to HTTPS\n"
 #endif
 		"	-h directory    Specify the document root, default is '.'\n"
@@ -249,7 +250,7 @@ int main(int argc, char **argv)
 	int bound = 0;
 #ifdef HAVE_TLS
 	int n_tls = 0;
-	const char *tls_key = NULL, *tls_crt = NULL;
+	const char *tls_key = NULL, *tls_crt = NULL, *tls_ciphers = NULL;
 #endif
 #ifdef HAVE_LUA
 	const char *lua_prefix = NULL, *lua_handler = NULL;
@@ -261,7 +262,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "A:aC:c:Dd:E:fh:H:I:i:K:k:L:l:m:N:n:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "A:aC:c:Dd:E:fh:H:I:i:K:k:L:l:m:N:n:P:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -270,6 +271,10 @@ int main(int argc, char **argv)
 
 		case 'K':
 			tls_key = optarg;
+			break;
+
+		case 'P':
+			tls_ciphers = optarg;
 			break;
 
 		case 'q':
@@ -282,6 +287,7 @@ int main(int argc, char **argv)
 #else
 		case 'C':
 		case 'K':
+		case 'P':
 		case 'q':
 		case 's':
 			fprintf(stderr, "uhttpd: TLS support not compiled, "
@@ -523,7 +529,7 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
-		if (uh_tls_init(tls_key, tls_crt))
+		if (uh_tls_init(tls_key, tls_crt, tls_ciphers))
 		    return 1;
 	}
 #endif
