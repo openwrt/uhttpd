@@ -194,8 +194,7 @@ static int client_parse_request(struct client *cl, char *data)
 
 	req->method = h_method;
 	req->version = h_version;
-	if (req->version < UH_HTTP_VER_1_1 || req->method == UH_HTTP_MSG_POST ||
-	    !conf.http_keepalive)
+	if (req->version < UH_HTTP_VER_1_1 || !conf.http_keepalive)
 		req->connection_close = true;
 
 	return CLIENT_STATE_HEADER;
