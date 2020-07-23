@@ -409,14 +409,7 @@ static void uh_ubus_send_list(struct client *cl, json_object *obj, struct blob_a
 
 static bool parse_json_rpc(struct rpc_data *d, struct blob_attr *data)
 {
-	const struct blobmsg_policy data_policy[] = {
-		{ .type = BLOBMSG_TYPE_STRING },
-		{ .type = BLOBMSG_TYPE_STRING },
-		{ .type = BLOBMSG_TYPE_STRING },
-		{ .type = BLOBMSG_TYPE_TABLE },
-	};
 	struct blob_attr *tb[__RPC_MAX];
-	struct blob_attr *tb2[4];
 	struct blob_attr *cur;
 
 	blobmsg_parse(rpc_policy, __RPC_MAX, tb, blob_data(data), blob_len(data));
@@ -440,24 +433,35 @@ static bool parse_json_rpc(struct rpc_data *d, struct blob_attr *data)
 	if (!d->params)
 		return false;
 
-	blobmsg_parse_array(data_policy, ARRAY_SIZE(data_policy), tb2,
+	return true;
+}
+
+static void parse_call_params(struct rpc_data *d)
+{
+	const struct blobmsg_policy data_policy[] = {
+		{ .type = BLOBMSG_TYPE_STRING },
+		{ .type = BLOBMSG_TYPE_STRING },
+		{ .type = BLOBMSG_TYPE_STRING },
+		{ .type = BLOBMSG_TYPE_TABLE },
+	};
+	struct blob_attr *tb[4];
+
+	blobmsg_parse_array(data_policy, ARRAY_SIZE(data_policy), tb,
 			    blobmsg_data(d->params), blobmsg_data_len(d->params));
 
-	if (tb2[0])
-		d->sid = blobmsg_data(tb2[0]);
+	if (tb[0])
+		d->sid = blobmsg_data(tb[0]);
 
 	if (conf.ubus_noauth && (!d->sid || !*d->sid))
 		d->sid = UH_UBUS_DEFAULT_SID;
 
-	if (tb2[1])
-		d->object = blobmsg_data(tb2[1]);
+	if (tb[1])
+		d->object = blobmsg_data(tb[1]);
 
-	if (tb2[2])
-		d->function = blobmsg_data(tb2[2]);
+	if (tb[2])
+		d->function = blobmsg_data(tb[2]);
 
-	d->data = tb2[3];
-
-	return true;
+	d->data = tb[3];
 }
 
 static void uh_ubus_init_batch(struct client *cl)
@@ -528,6 +532,8 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 		goto error;
 
 	if (!strcmp(data.method, "call")) {
+		parse_call_params(&data);
+
 		if (!data.sid || !data.object || !data.function || !data.data)
 			goto error;
 
