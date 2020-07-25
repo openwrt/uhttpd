@@ -288,7 +288,7 @@ static void uh_ubus_single_error(struct client *cl, enum rpc_error type)
 	ops->request_done(cl);
 }
 
-static void uh_ubus_send_request(struct client *cl, json_object *obj, const char *sid, struct blob_attr *args)
+static void uh_ubus_send_request(struct client *cl, const char *sid, struct blob_attr *args)
 {
 	struct dispatch *d = &cl->dispatch;
 	struct dispatch_ubus *du = &d->ubus;
@@ -370,7 +370,7 @@ static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *o
 	blobmsg_close_table(data->buf, o);
 }
 
-static void uh_ubus_send_list(struct client *cl, json_object *obj, struct blob_attr *params)
+static void uh_ubus_send_list(struct client *cl, struct blob_attr *params)
 {
 	struct blob_attr *cur, *dup;
 	struct list_data data = { .buf = &cl->dispatch.ubus.buf, .verbose = false };
@@ -548,11 +548,11 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 			goto error;
 		}
 
-		uh_ubus_send_request(cl, obj, data.sid, data.data);
+		uh_ubus_send_request(cl, data.sid, data.data);
 		goto out;
 	}
 	else if (!strcmp(data.method, "list")) {
-		uh_ubus_send_list(cl, obj, data.params);
+		uh_ubus_send_list(cl, data.params);
 		goto out;
 	}
 	else {
