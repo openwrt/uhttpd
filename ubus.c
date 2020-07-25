@@ -48,7 +48,7 @@ enum {
 static const struct blobmsg_policy rpc_policy[__RPC_MAX] = {
 	[RPC_JSONRPC] = { .name = "jsonrpc", .type = BLOBMSG_TYPE_STRING },
 	[RPC_METHOD] = { .name = "method", .type = BLOBMSG_TYPE_STRING },
-	[RPC_PARAMS] = { .name = "params", .type = BLOBMSG_TYPE_ARRAY },
+	[RPC_PARAMS] = { .name = "params", .type = BLOBMSG_TYPE_UNSPEC },
 	[RPC_ID] = { .name = "id", .type = BLOBMSG_TYPE_UNSPEC },
 };
 
@@ -445,6 +445,9 @@ static void parse_call_params(struct rpc_data *d)
 		{ .type = BLOBMSG_TYPE_TABLE },
 	};
 	struct blob_attr *tb[4];
+
+	if (!d->params || blobmsg_type(d->params) != BLOBMSG_TYPE_ARRAY)
+		return;
 
 	blobmsg_parse_array(data_policy, ARRAY_SIZE(data_policy), tb,
 			    blobmsg_data(d->params), blobmsg_data_len(d->params));
