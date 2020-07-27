@@ -194,7 +194,6 @@ static void uh_ubus_init_response(struct client *cl)
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
 	struct json_object *obj = du->jsobj_cur, *obj2 = NULL;
 
-	blob_buf_init(&buf, 0);
 	blobmsg_add_string(&buf, "jsonrpc", "2.0");
 
 	if (obj)
@@ -520,6 +519,7 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
 	struct rpc_data data = {};
 	enum rpc_error err = ERROR_PARSE;
+	static struct blob_buf req;
 
 	uh_client_ref(cl);
 
@@ -527,11 +527,11 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 		goto error;
 
 	du->jsobj_cur = obj;
-	blob_buf_init(&buf, 0);
-	if (!blobmsg_add_object(&buf, obj))
+	blob_buf_init(&req, 0);
+	if (!blobmsg_add_object(&req, obj))
 		goto error;
 
-	if (!parse_json_rpc(&data, buf.head))
+	if (!parse_json_rpc(&data, req.head))
 		goto error;
 
 	if (!strcmp(data.method, "call")) {
