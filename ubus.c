@@ -189,7 +189,7 @@ static void uh_ubus_send_response(struct client *cl)
 		return ops->request_done(cl);
 }
 
-static void uh_ubus_init_response(struct client *cl)
+static void uh_ubus_init_json_rpc_response(struct client *cl)
 {
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
 	struct json_object *obj = du->jsobj_cur, *obj2 = NULL;
@@ -205,11 +205,11 @@ static void uh_ubus_init_response(struct client *cl)
 		blobmsg_add_field(&buf, BLOBMSG_TYPE_UNSPEC, "id", NULL, 0);
 }
 
-static void uh_ubus_json_error(struct client *cl, enum rpc_error type)
+static void uh_ubus_json_rpc_error(struct client *cl, enum rpc_error type)
 {
 	void *c;
 
-	uh_ubus_init_response(cl);
+	uh_ubus_init_json_rpc_response(cl);
 	c = blobmsg_open_table(&buf, "error");
 	blobmsg_add_u32(&buf, "code", json_errors[type].code);
 	blobmsg_add_string(&buf, "message", json_errors[type].msg);
@@ -235,7 +235,7 @@ uh_ubus_request_cb(struct ubus_request *req, int ret)
 	int rem;
 
 	uloop_timeout_cancel(&du->timeout);
-	uh_ubus_init_response(cl);
+	uh_ubus_init_json_rpc_response(cl);
 	r = blobmsg_open_array(&buf, "result");
 	blobmsg_add_u32(&buf, "", ret);
 	blob_for_each_attr(cur, du->buf.head, rem)
@@ -251,7 +251,7 @@ uh_ubus_timeout_cb(struct uloop_timeout *timeout)
 	struct client *cl = container_of(du, struct client, dispatch.ubus);
 
 	ubus_abort_request(ctx, &du->req);
-	uh_ubus_json_error(cl, ERROR_TIMEOUT);
+	uh_ubus_json_rpc_error(cl, ERROR_TIMEOUT);
 }
 
 static void uh_ubus_close_fds(struct client *cl)
@@ -283,7 +283,7 @@ static void uh_ubus_request_free(struct client *cl)
 static void uh_ubus_single_error(struct client *cl, enum rpc_error type)
 {
 	uh_ubus_send_header(cl);
-	uh_ubus_json_error(cl, type);
+	uh_ubus_json_rpc_error(cl, type);
 	ops->request_done(cl);
 }
 
@@ -298,7 +298,7 @@ static void uh_ubus_send_request(struct client *cl, const char *sid, struct blob
 	blob_buf_init(&req, 0);
 	blobmsg_for_each_attr(cur, args, rem) {
 		if (!strcmp(blobmsg_name(cur), "ubus_rpc_session"))
-			return uh_ubus_json_error(cl, ERROR_PARAMS);
+			return uh_ubus_json_rpc_error(cl, ERROR_PARAMS);
 		blobmsg_add_blob(&req, cur);
 	}
 
@@ -308,7 +308,7 @@ static void uh_ubus_send_request(struct client *cl, const char *sid, struct blob
 	memset(&du->req, 0, sizeof(du->req));
 	ret = ubus_invoke_async(ctx, du->obj, du->func, req.head, &du->req);
 	if (ret)
-		return uh_ubus_json_error(cl, ERROR_INTERNAL);
+		return uh_ubus_json_rpc_error(cl, ERROR_INTERNAL);
 
 	du->req.data_cb = uh_ubus_request_data_cb;
 	du->req.complete_cb = uh_ubus_request_cb;
@@ -401,7 +401,7 @@ static void uh_ubus_send_list(struct client *cl, struct blob_attr *params)
 
 	uh_client_unref(cl);
 
-	uh_ubus_init_response(cl);
+	uh_ubus_init_json_rpc_response(cl);
 	blobmsg_add_blob(&buf, blob_data(data.buf->head));
 	uh_ubus_send_response(cl);
 }
@@ -564,7 +564,7 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 	}
 
 error:
-	uh_ubus_json_error(cl, err);
+	uh_ubus_json_rpc_error(cl, err);
 out:
 	if (data.params)
 		free(data.params);
