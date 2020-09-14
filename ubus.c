@@ -73,6 +73,7 @@ struct rpc_data {
 
 struct list_data {
 	bool verbose;
+	bool add_object;
 	struct blob_buf *buf;
 };
 
@@ -154,14 +155,14 @@ static void uh_ubus_add_cors_headers(struct client *cl)
 	ustream_printf(cl->us, "Access-Control-Allow-Credentials: true\r\n");
 }
 
-static void uh_ubus_send_header(struct client *cl)
+static void uh_ubus_send_header(struct client *cl, int code, const char *summary, const char *content_type)
 {
-	ops->http_header(cl, 200, "OK");
+	ops->http_header(cl, code, summary);
 
 	if (conf.ubus_cors)
 		uh_ubus_add_cors_headers(cl);
 
-	ustream_printf(cl->us, "Content-Type: application/json\r\n");
+	ustream_printf(cl->us, "Content-Type: %s\r\n", content_type);
 
 	if (cl->request.method == UH_HTTP_MSG_OPTIONS)
 		ustream_printf(cl->us, "Content-Length: 0\r\n");
@@ -219,12 +220,169 @@ static void uh_ubus_json_rpc_error(struct client *cl, enum rpc_error type)
 	uh_ubus_send_response(cl, &buf);
 }
 
+static void uh_ubus_error(struct client *cl, int code, const char *message)
+{
+	blob_buf_init(&buf, 0);
+
+	blobmsg_add_u32(&buf, "code", code);
+	blobmsg_add_string(&buf, "message", message);
+	uh_ubus_send_response(cl, &buf);
+}
+
+static void uh_ubus_posix_error(struct client *cl, int err)
+{
+	uh_ubus_error(cl, -err, strerror(err));
+}
+
+static void uh_ubus_ubus_error(struct client *cl, int err)
+{
+	uh_ubus_error(cl, err, ubus_strerror(err));
+}
+
+/* GET requests handling */
+
+static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *obj, void *priv);
+
+static void uh_ubus_handle_get_list(struct client *cl, const char *path)
+{
+	static struct blob_buf tmp;
+	struct list_data data = { .verbose = true, .add_object = !path, .buf = &tmp};
+	struct blob_attr *cur;
+	int rem;
+	int err;
+
+	blob_buf_init(&tmp, 0);
+
+	err = ubus_lookup(ctx, path, uh_ubus_list_cb, &data);
+	if (err) {
+		uh_ubus_send_header(cl, 500, "Ubus Protocol Error", "application/json");
+		uh_ubus_ubus_error(cl, err);
+		return;
+	}
+
+	blob_buf_init(&buf, 0);
+	blob_for_each_attr(cur, tmp.head, rem)
+		blobmsg_add_blob(&buf, cur);
+
+	uh_ubus_send_header(cl, 200, "OK", "application/json");
+	uh_ubus_send_response(cl, &buf);
+}
+
+static int uh_ubus_subscription_notification_cb(struct ubus_context *ctx,
+						struct ubus_object *obj,
+						struct ubus_request_data *req,
+						const char *method,
+						struct blob_attr *msg)
+{
+	struct ubus_subscriber *s;
+	struct dispatch_ubus *du;
+	struct client *cl;
+	char *json;
+
+	s = container_of(obj, struct ubus_subscriber, obj);
+	du = container_of(s, struct dispatch_ubus, sub);
+	cl = container_of(du, struct client, dispatch.ubus);
+
+	json = blobmsg_format_json(msg, true);
+	if (json) {
+		ops->chunk_printf(cl, "event: %s\ndata: %s\n\n", method, json);
+		free(json);
+	}
+
+	return 0;
+}
+
+static void uh_ubus_subscription_notification_remove_cb(struct ubus_context *ctx, struct ubus_subscriber *s, uint32_t id)
+{
+	struct dispatch_ubus *du;
+	struct client *cl;
+
+	du = container_of(s, struct dispatch_ubus, sub);
+	cl = container_of(du, struct client, dispatch.ubus);
+
+	ops->request_done(cl);
+}
+
+static void uh_ubus_handle_get_subscribe(struct client *cl, const char *sid, const char *path)
+{
+	struct dispatch_ubus *du = &cl->dispatch.ubus;
+	uint32_t id;
+	int err;
+
+	/* TODO: add ACL support */
+	if (!conf.ubus_noauth) {
+		uh_ubus_send_header(cl, 200, "OK", "application/json");
+		uh_ubus_posix_error(cl, EACCES);
+		return;
+	}
+
+	du->sub.cb = uh_ubus_subscription_notification_cb;
+	du->sub.remove_cb = uh_ubus_subscription_notification_remove_cb;
+
+	uh_client_ref(cl);
+
+	err = ubus_register_subscriber(ctx, &du->sub);
+	if (err)
+		goto err_unref;
+
+	err = ubus_lookup_id(ctx, path, &id);
+	if (err)
+		goto err_unregister;
+
+	err = ubus_subscribe(ctx, &du->sub, id);
+	if (err)
+		goto err_unregister;
+
+	uh_ubus_send_header(cl, 200, "OK", "text/event-stream");
+
+	if (conf.events_retry)
+		ops->chunk_printf(cl, "retry: %d\n", conf.events_retry);
+
+	return;
+
+err_unregister:
+	ubus_unregister_subscriber(ctx, &du->sub);
+err_unref:
+	uh_client_unref(cl);
+	if (err) {
+		uh_ubus_send_header(cl, 200, "OK", "application/json");
+		uh_ubus_ubus_error(cl, err);
+	}
+}
+
+static void uh_ubus_handle_get(struct client *cl)
+{
+	struct dispatch_ubus *du = &cl->dispatch.ubus;
+	const char *url = du->url_path;
+
+	url += strlen(conf.ubus_prefix);
+
+	if (!strcmp(url, "/list") || !strncmp(url, "/list/", strlen("/list/"))) {
+		url += strlen("/list");
+
+		uh_ubus_handle_get_list(cl, *url ? url + 1 : NULL);
+	} else if (!strncmp(url, "/subscribe/", strlen("/subscribe/"))) {
+		url += strlen("/subscribe");
+
+		uh_ubus_handle_get_subscribe(cl, NULL, url + 1);
+	} else {
+		ops->http_header(cl, 404, "Not Found");
+		ustream_printf(cl->us, "\r\n");
+		ops->request_done(cl);
+	}
+}
+
+/* POST requests handling */
+
 static void
 uh_ubus_request_data_cb(struct ubus_request *req, int type, struct blob_attr *msg)
 {
 	struct dispatch_ubus *du = container_of(req, struct dispatch_ubus, req);
+	struct blob_attr *cur;
+	int len;
 
-	blobmsg_add_field(&du->buf, BLOBMSG_TYPE_TABLE, "", blob_data(msg), blob_len(msg));
+	blob_for_each_attr(cur, msg, len)
+		blobmsg_add_blob(&du->buf, cur);
 }
 
 static void
@@ -239,13 +397,46 @@ uh_ubus_request_cb(struct ubus_request *req, int ret)
 	blob_buf_init(&buf, 0);
 
 	uloop_timeout_cancel(&du->timeout);
-	uh_ubus_init_json_rpc_response(cl, &buf);
-	r = blobmsg_open_array(&buf, "result");
-	blobmsg_add_u32(&buf, "", ret);
-	blob_for_each_attr(cur, du->buf.head, rem)
-		blobmsg_add_blob(&buf, cur);
-	blobmsg_close_array(&buf, r);
-	uh_ubus_send_response(cl, &buf);
+
+	/* Legacy format always uses "result" array - even for errors and empty
+	 * results. */
+	if (du->legacy) {
+		void *c;
+
+		uh_ubus_init_json_rpc_response(cl, &buf);
+		r = blobmsg_open_array(&buf, "result");
+		blobmsg_add_u32(&buf, "", ret);
+		c = blobmsg_open_table(&buf, NULL);
+		blob_for_each_attr(cur, du->buf.head, rem)
+			blobmsg_add_blob(&buf, cur);
+		blobmsg_close_table(&buf, c);
+		blobmsg_close_array(&buf, r);
+		uh_ubus_send_response(cl, &buf);
+		return;
+	}
+
+	if (ret) {
+		void *c;
+
+		uh_ubus_init_json_rpc_response(cl, &buf);
+		c = blobmsg_open_table(&buf, "error");
+		blobmsg_add_u32(&buf, "code", ret);
+		blobmsg_add_string(&buf, "message", ubus_strerror(ret));
+		blobmsg_close_table(&buf, c);
+		uh_ubus_send_response(cl, &buf);
+	} else {
+		uh_ubus_init_json_rpc_response(cl, &buf);
+		if (blob_len(du->buf.head)) {
+			r = blobmsg_open_table(&buf, "result");
+			blob_for_each_attr(cur, du->buf.head, rem)
+				blobmsg_add_blob(&buf, cur);
+			blobmsg_close_table(&buf, r);
+		} else {
+			blobmsg_add_field(&buf, BLOBMSG_TYPE_UNSPEC, "result", NULL, 0);
+		}
+		uh_ubus_send_response(cl, &buf);
+	}
+
 }
 
 static void
@@ -282,11 +473,14 @@ static void uh_ubus_request_free(struct client *cl)
 
 	if (du->req_pending)
 		ubus_abort_request(ctx, &du->req);
+
+	free(du->url_path);
+	du->url_path = NULL;
 }
 
 static void uh_ubus_single_error(struct client *cl, enum rpc_error type)
 {
-	uh_ubus_send_header(cl);
+	uh_ubus_send_header(cl, 200, "OK", "application/json");
 	uh_ubus_json_rpc_error(cl, type);
 	ops->request_done(cl);
 }
@@ -339,7 +533,8 @@ static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *o
 	if (!obj->signature)
 		return;
 
-	o = blobmsg_open_table(data->buf, obj->path);
+	if (data->add_object)
+		o = blobmsg_open_table(data->buf, obj->path);
 	blob_for_each_attr(sig, obj->signature, rem) {
 		t = blobmsg_open_table(data->buf, blobmsg_name(sig));
 		rem2 = blobmsg_data_len(sig);
@@ -370,13 +565,14 @@ static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *o
 		}
 		blobmsg_close_table(data->buf, t);
 	}
-	blobmsg_close_table(data->buf, o);
+	if (data->add_object)
+		blobmsg_close_table(data->buf, o);
 }
 
 static void uh_ubus_send_list(struct client *cl, struct blob_attr *params)
 {
 	struct blob_attr *cur, *dup;
-	struct list_data data = { .buf = &cl->dispatch.ubus.buf, .verbose = false };
+	struct list_data data = { .buf = &cl->dispatch.ubus.buf, .verbose = false, .add_object = true };
 	void *r;
 	int rem;
 
@@ -476,7 +672,7 @@ static void uh_ubus_init_batch(struct client *cl)
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
 
 	du->array = true;
-	uh_ubus_send_header(cl);
+	uh_ubus_send_header(cl, 200, "OK", "application/json");
 	ops->chunk_printf(cl, "[");
 }
 
@@ -599,13 +795,104 @@ static void uh_ubus_data_done(struct client *cl)
 
 	switch (obj ? json_object_get_type(obj) : json_type_null) {
 	case json_type_object:
-		uh_ubus_send_header(cl);
+		uh_ubus_send_header(cl, 200, "OK", "application/json");
 		return uh_ubus_handle_request_object(cl, obj);
 	case json_type_array:
 		uh_ubus_init_batch(cl);
 		return uh_ubus_next_batched_request(cl);
 	default:
 		return uh_ubus_single_error(cl, ERROR_PARSE);
+	}
+}
+
+static void uh_ubus_call(struct client *cl, const char *path, const char *sid)
+{
+	struct dispatch_ubus *du = &cl->dispatch.ubus;
+	struct json_object *obj = du->jsobj;
+	struct rpc_data data = {};
+	enum rpc_error err = ERROR_PARSE;
+	static struct blob_buf req;
+
+	uh_client_ref(cl);
+
+	if (!obj || json_object_get_type(obj) != json_type_object)
+		goto error;
+
+	uh_ubus_send_header(cl, 200, "OK", "application/json");
+
+	du->jsobj_cur = obj;
+	blob_buf_init(&req, 0);
+	if (!blobmsg_add_object(&req, obj))
+		goto error;
+
+	if (!parse_json_rpc(&data, req.head))
+		goto error;
+
+	du->func = data.method;
+	if (ubus_lookup_id(ctx, path, &du->obj)) {
+		err = ERROR_OBJECT;
+		goto error;
+	}
+
+	if (!conf.ubus_noauth && !uh_ubus_allowed(sid, path, data.method)) {
+		err = ERROR_ACCESS;
+		goto error;
+	}
+
+	uh_ubus_send_request(cl, sid, data.params);
+	goto out;
+
+error:
+	uh_ubus_json_rpc_error(cl, err);
+out:
+	if (data.params)
+		free(data.params);
+
+	uh_client_unref(cl);
+}
+
+enum ubus_hdr {
+	HDR_AUTHORIZATION,
+	__HDR_UBUS_MAX
+};
+
+static void uh_ubus_handle_post(struct client *cl)
+{
+	static const struct blobmsg_policy hdr_policy[__HDR_UBUS_MAX] = {
+		[HDR_AUTHORIZATION] = { "authorization", BLOBMSG_TYPE_STRING },
+	};
+	struct dispatch_ubus *du = &cl->dispatch.ubus;
+	struct blob_attr *tb[__HDR_UBUS_MAX];
+	const char *url = du->url_path;
+	const char *auth;
+
+	/* Treat both: /foo AND /foo/ as legacy requests. */
+	if (ops->path_match(conf.ubus_prefix, url) && strlen(url) - strlen(conf.ubus_prefix) <= 1) {
+		du->legacy = true;
+		uh_ubus_data_done(cl);
+		return;
+	}
+
+	blobmsg_parse(hdr_policy, __HDR_UBUS_MAX, tb, blob_data(cl->hdr.head), blob_len(cl->hdr.head));
+
+	auth = UH_UBUS_DEFAULT_SID;
+	if (tb[HDR_AUTHORIZATION]) {
+		const char *tmp = blobmsg_get_string(tb[HDR_AUTHORIZATION]);
+
+		if (!strncasecmp(tmp, "Bearer ", 7))
+			auth = tmp + 7;
+	}
+
+	url += strlen(conf.ubus_prefix);
+
+	if (!strncmp(url, "/call/", strlen("/call/"))) {
+		url += strlen("/call/");
+
+		uh_ubus_call(cl, url, auth);
+	} else {
+		ops->http_header(cl, 404, "Not Found");
+		ustream_printf(cl->us, "\r\n");
+		ops->request_done(cl);
 	}
 }
 
@@ -631,25 +918,44 @@ error:
 static void uh_ubus_handle_request(struct client *cl, char *url, struct path_info *pi)
 {
 	struct dispatch *d = &cl->dispatch;
+	struct dispatch_ubus *du = &d->ubus;
+	char *chr;
+
+	du->url_path = strdup(url);
+	if (!du->url_path) {
+		ops->client_error(cl, 500, "Internal Server Error", "Failed to allocate resources");
+		return;
+	}
+	chr = strchr(du->url_path, '?');
+	if (chr)
+		chr[0] = '\0';
+
+	du->legacy = false;
 
 	switch (cl->request.method)
 	{
+	case UH_HTTP_MSG_GET:
+		uh_ubus_handle_get(cl);
+		break;
 	case UH_HTTP_MSG_POST:
 		d->data_send = uh_ubus_data_send;
-		d->data_done = uh_ubus_data_done;
+		d->data_done = uh_ubus_handle_post;
 		d->close_fds = uh_ubus_close_fds;
 		d->free = uh_ubus_request_free;
-		d->ubus.jstok = json_tokener_new();
-		break;
+		du->jstok = json_tokener_new();
+		return;
 
 	case UH_HTTP_MSG_OPTIONS:
-		uh_ubus_send_header(cl);
+		uh_ubus_send_header(cl, 200, "OK", "application/json");
 		ops->request_done(cl);
 		break;
 
 	default:
 		ops->client_error(cl, 400, "Bad Request", "Invalid Request");
 	}
+
+	free(du->url_path);
+	du->url_path = NULL;
 }
 
 static bool

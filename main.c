@@ -159,6 +159,7 @@ static int usage(const char *name)
 		"	-U file         Override ubus socket path\n"
 		"	-a              Do not authenticate JSON-RPC requests against UBUS session api\n"
 		"	-X		Enable CORS HTTP headers on JSON-RPC api\n"
+		"	-e		Events subscription reconnection time (retry value)\n"
 #endif
 		"	-x string       URL prefix for CGI handler, default is '/cgi-bin'\n"
 		"	-y alias[=path]	URL alias handle\n"
@@ -262,7 +263,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "A:aC:c:Dd:E:fh:H:I:i:K:k:L:l:m:N:n:P:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "A:aC:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:P:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -490,11 +491,16 @@ int main(int argc, char **argv)
 		case 'X':
 			conf.ubus_cors = 1;
 			break;
+
+		case 'e':
+			conf.events_retry = atoi(optarg);
+			break;
 #else
 		case 'a':
 		case 'u':
 		case 'U':
 		case 'X':
+		case 'e':
 			fprintf(stderr, "uhttpd: UBUS support not compiled, "
 			                "ignoring -%c\n", ch);
 			break;

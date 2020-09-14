@@ -82,6 +82,7 @@ struct config {
 	int ubus_noauth;
 	int ubus_cors;
 	int cgi_prefix_len;
+	int events_retry;
 	struct list_head cgi_alias;
 	struct list_head lua_prefix;
 };
@@ -209,6 +210,7 @@ struct dispatch_ubus {
 	struct json_tokener *jstok;
 	struct json_object *jsobj;
 	struct json_object *jsobj_cur;
+	char *url_path;
 	int post_len;
 
 	uint32_t obj;
@@ -218,6 +220,9 @@ struct dispatch_ubus {
 	bool req_pending;
 	bool array;
 	int array_idx;
+	bool legacy; /* Got legacy request => use legacy reply */
+
+	struct ubus_subscriber sub;
 };
 #endif
 
