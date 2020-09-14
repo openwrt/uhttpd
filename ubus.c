@@ -169,7 +169,7 @@ static void uh_ubus_send_header(struct client *cl)
 	ustream_printf(cl->us, "\r\n");
 }
 
-static void uh_ubus_send_response(struct client *cl)
+static void uh_ubus_send_response(struct client *cl, struct blob_buf *buf)
 {
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
 	const char *sep = "";
@@ -178,7 +178,7 @@ static void uh_ubus_send_response(struct client *cl)
 	if (du->array && du->array_idx > 1)
 		sep = ",";
 
-	str = blobmsg_format_json(buf.head, true);
+	str = blobmsg_format_json(buf->head, true);
 	ops->chunk_printf(cl, "%s%s", sep, str);
 	free(str);
 
@@ -189,32 +189,34 @@ static void uh_ubus_send_response(struct client *cl)
 		return ops->request_done(cl);
 }
 
-static void uh_ubus_init_json_rpc_response(struct client *cl)
+static void uh_ubus_init_json_rpc_response(struct client *cl, struct blob_buf *buf)
 {
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
 	struct json_object *obj = du->jsobj_cur, *obj2 = NULL;
 
-	blobmsg_add_string(&buf, "jsonrpc", "2.0");
+	blobmsg_add_string(buf, "jsonrpc", "2.0");
 
 	if (obj)
 		json_object_object_get_ex(obj, "id", &obj2);
 
 	if (obj2)
-		blobmsg_add_json_element(&buf, "id", obj2);
+		blobmsg_add_json_element(buf, "id", obj2);
 	else
-		blobmsg_add_field(&buf, BLOBMSG_TYPE_UNSPEC, "id", NULL, 0);
+		blobmsg_add_field(buf, BLOBMSG_TYPE_UNSPEC, "id", NULL, 0);
 }
 
 static void uh_ubus_json_rpc_error(struct client *cl, enum rpc_error type)
 {
 	void *c;
 
-	uh_ubus_init_json_rpc_response(cl);
+	blob_buf_init(&buf, 0);
+
+	uh_ubus_init_json_rpc_response(cl, &buf);
 	c = blobmsg_open_table(&buf, "error");
 	blobmsg_add_u32(&buf, "code", json_errors[type].code);
 	blobmsg_add_string(&buf, "message", json_errors[type].msg);
 	blobmsg_close_table(&buf, c);
-	uh_ubus_send_response(cl);
+	uh_ubus_send_response(cl, &buf);
 }
 
 static void
@@ -234,14 +236,16 @@ uh_ubus_request_cb(struct ubus_request *req, int ret)
 	void *r;
 	int rem;
 
+	blob_buf_init(&buf, 0);
+
 	uloop_timeout_cancel(&du->timeout);
-	uh_ubus_init_json_rpc_response(cl);
+	uh_ubus_init_json_rpc_response(cl, &buf);
 	r = blobmsg_open_array(&buf, "result");
 	blobmsg_add_u32(&buf, "", ret);
 	blob_for_each_attr(cur, du->buf.head, rem)
 		blobmsg_add_blob(&buf, cur);
 	blobmsg_close_array(&buf, r);
-	uh_ubus_send_response(cl);
+	uh_ubus_send_response(cl, &buf);
 }
 
 static void
@@ -401,9 +405,10 @@ static void uh_ubus_send_list(struct client *cl, struct blob_attr *params)
 
 	uh_client_unref(cl);
 
-	uh_ubus_init_json_rpc_response(cl);
+	blob_buf_init(&buf, 0);
+	uh_ubus_init_json_rpc_response(cl, &buf);
 	blobmsg_add_blob(&buf, blob_data(data.buf->head));
-	uh_ubus_send_response(cl);
+	uh_ubus_send_response(cl, &buf);
 }
 
 static bool parse_json_rpc(struct rpc_data *d, struct blob_attr *data)
@@ -626,8 +631,6 @@ error:
 static void uh_ubus_handle_request(struct client *cl, char *url, struct path_info *pi)
 {
 	struct dispatch *d = &cl->dispatch;
-
-	blob_buf_init(&buf, 0);
 
 	switch (cl->request.method)
 	{
