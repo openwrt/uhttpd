@@ -112,6 +112,30 @@ enum cors_hdr {
 	__HDR_MAX
 };
 
+enum ubus_hdr {
+	HDR_AUTHORIZATION,
+	__HDR_UBUS_MAX
+};
+
+static const char *uh_ubus_get_auth(const struct blob_attr *attr)
+{
+	static const struct blobmsg_policy hdr_policy[__HDR_UBUS_MAX] = {
+		[HDR_AUTHORIZATION] = { "authorization", BLOBMSG_TYPE_STRING },
+	};
+	struct blob_attr *tb[__HDR_UBUS_MAX];
+
+	blobmsg_parse(hdr_policy, __HDR_UBUS_MAX, tb, blob_data(attr), blob_len(attr));
+
+	if (tb[HDR_AUTHORIZATION]) {
+		const char *tmp = blobmsg_get_string(tb[HDR_AUTHORIZATION]);
+
+		if (!strncasecmp(tmp, "Bearer ", 7))
+			return tmp + 7;
+	}
+
+	return UH_UBUS_DEFAULT_SID;
+}
+
 static void __uh_ubus_next_batched_request(struct uloop_timeout *timeout);
 
 static void uh_ubus_next_batched_request(struct client *cl)
@@ -239,6 +263,39 @@ static void uh_ubus_ubus_error(struct client *cl, int err)
 	uh_ubus_error(cl, err, ubus_strerror(err));
 }
 
+static void uh_ubus_allowed_cb(struct ubus_request *req, int type, struct blob_attr *msg)
+{
+	struct blob_attr *tb[__SES_MAX];
+	bool *allow = (bool *)req->priv;
+
+	if (!msg)
+		return;
+
+	blobmsg_parse(ses_policy, __SES_MAX, tb, blob_data(msg), blob_len(msg));
+
+	if (tb[SES_ACCESS])
+		*allow = blobmsg_get_bool(tb[SES_ACCESS]);
+}
+
+static bool uh_ubus_allowed(const char *sid, const char *obj, const char *fun)
+{
+	uint32_t id;
+	bool allow = false;
+	static struct blob_buf req;
+
+	if (ubus_lookup_id(ctx, "session", &id))
+		return false;
+
+	blob_buf_init(&req, 0);
+	blobmsg_add_string(&req, "ubus_rpc_session", sid);
+	blobmsg_add_string(&req, "object", obj);
+	blobmsg_add_string(&req, "function", fun);
+
+	ubus_invoke(ctx, id, "access", req.head, uh_ubus_allowed_cb, &allow, conf.script_timeout * 500);
+
+	return allow;
+}
+
 /* GET requests handling */
 
 static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *obj, void *priv);
@@ -303,14 +360,16 @@ static void uh_ubus_subscription_notification_remove_cb(struct ubus_context *ctx
 	ops->request_done(cl);
 }
 
-static void uh_ubus_handle_get_subscribe(struct client *cl, const char *sid, const char *path)
+static void uh_ubus_handle_get_subscribe(struct client *cl, const char *path)
 {
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
+	const char *sid;
 	uint32_t id;
 	int err;
 
-	/* TODO: add ACL support */
-	if (!conf.ubus_noauth) {
+	sid = uh_ubus_get_auth(cl->hdr.head);
+
+	if (!conf.ubus_noauth && !uh_ubus_allowed(sid, path, ":subscribe")) {
 		uh_ubus_send_header(cl, 200, "OK", "application/json");
 		uh_ubus_posix_error(cl, EACCES);
 		return;
@@ -364,7 +423,7 @@ static void uh_ubus_handle_get(struct client *cl)
 	} else if (!strncmp(url, "/subscribe/", strlen("/subscribe/"))) {
 		url += strlen("/subscribe");
 
-		uh_ubus_handle_get_subscribe(cl, NULL, url + 1);
+		uh_ubus_handle_get_subscribe(cl, url + 1);
 	} else {
 		ops->http_header(cl, 404, "Not Found");
 		ustream_printf(cl->us, "\r\n");
@@ -682,39 +741,6 @@ static void uh_ubus_complete_batch(struct client *cl)
 	ops->request_done(cl);
 }
 
-static void uh_ubus_allowed_cb(struct ubus_request *req, int type, struct blob_attr *msg)
-{
-	struct blob_attr *tb[__SES_MAX];
-	bool *allow = (bool *)req->priv;
-
-	if (!msg)
-		return;
-
-	blobmsg_parse(ses_policy, __SES_MAX, tb, blob_data(msg), blob_len(msg));
-
-	if (tb[SES_ACCESS])
-		*allow = blobmsg_get_bool(tb[SES_ACCESS]);
-}
-
-static bool uh_ubus_allowed(const char *sid, const char *obj, const char *fun)
-{
-	uint32_t id;
-	bool allow = false;
-	static struct blob_buf req;
-
-	if (ubus_lookup_id(ctx, "session", &id))
-		return false;
-
-	blob_buf_init(&req, 0);
-	blobmsg_add_string(&req, "ubus_rpc_session", sid);
-	blobmsg_add_string(&req, "object", obj);
-	blobmsg_add_string(&req, "function", fun);
-
-	ubus_invoke(ctx, id, "access", req.head, uh_ubus_allowed_cb, &allow, conf.script_timeout * 500);
-
-	return allow;
-}
-
 static void uh_ubus_handle_request_object(struct client *cl, struct json_object *obj)
 {
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
@@ -851,18 +877,9 @@ out:
 	uh_client_unref(cl);
 }
 
-enum ubus_hdr {
-	HDR_AUTHORIZATION,
-	__HDR_UBUS_MAX
-};
-
 static void uh_ubus_handle_post(struct client *cl)
 {
-	static const struct blobmsg_policy hdr_policy[__HDR_UBUS_MAX] = {
-		[HDR_AUTHORIZATION] = { "authorization", BLOBMSG_TYPE_STRING },
-	};
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
-	struct blob_attr *tb[__HDR_UBUS_MAX];
 	const char *url = du->url_path;
 	const char *auth;
 
@@ -873,15 +890,7 @@ static void uh_ubus_handle_post(struct client *cl)
 		return;
 	}
 
-	blobmsg_parse(hdr_policy, __HDR_UBUS_MAX, tb, blob_data(cl->hdr.head), blob_len(cl->hdr.head));
-
-	auth = UH_UBUS_DEFAULT_SID;
-	if (tb[HDR_AUTHORIZATION]) {
-		const char *tmp = blobmsg_get_string(tb[HDR_AUTHORIZATION]);
-
-		if (!strncasecmp(tmp, "Bearer ", 7))
-			auth = tmp + 7;
-	}
+	auth = uh_ubus_get_auth(cl->hdr.head);
 
 	url += strlen(conf.ubus_prefix);
 
