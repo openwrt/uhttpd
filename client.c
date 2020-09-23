@@ -95,7 +95,8 @@ static void client_timeout(struct uloop_timeout *timeout)
 	struct client *cl = container_of(timeout, struct client, timeout);
 
 	cl->state = CLIENT_STATE_CLOSE;
-	uh_connection_close(cl);
+	cl->request.connection_close = true;
+	uh_request_done(cl);
 }
 
 static void uh_set_client_timeout(struct client *cl, int timeout)
