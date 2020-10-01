@@ -395,6 +395,7 @@ void client_poll_post_data(struct client *cl)
 {
 	struct dispatch *d = &cl->dispatch;
 	struct http_request *r = &cl->request;
+	enum client_state st;
 	char *buf;
 	int len;
 
@@ -459,10 +460,13 @@ void client_poll_post_data(struct client *cl)
 	buf = ustream_get_read_buf(cl->us, &len);
 	if (!r->content_length && !r->transfer_chunked &&
 		cl->state != CLIENT_STATE_DONE) {
+		st = cl->state;
+
 		if (cl->dispatch.data_done)
 			cl->dispatch.data_done(cl);
 
-		cl->state = CLIENT_STATE_DONE;
+		if (cl->state == st)
+			cl->state = CLIENT_STATE_DONE;
 	}
 }
 
