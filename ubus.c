@@ -357,6 +357,8 @@ static void uh_ubus_subscription_notification_remove_cb(struct ubus_context *ctx
 	du = container_of(s, struct dispatch_ubus, sub);
 	cl = container_of(du, struct client, dispatch.ubus);
 
+	ubus_unregister_subscriber(ctx, &du->sub);
+
 	ops->request_done(cl);
 }
 
