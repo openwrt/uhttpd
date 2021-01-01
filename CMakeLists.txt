@@ -36,9 +36,13 @@ IF(HAVE_SHADOW)
     ADD_DEFINITIONS(-DHAVE_SHADOW)
 ENDIF()
 
+FIND_LIBRARY(ubox NAMES ubox)
+FIND_LIBRARY(json_script NAMES json_script)
+FIND_LIBRARY(blobmsg_json NAMES blobmsg_json)
+
 ADD_EXECUTABLE(uhttpd ${SOURCES})
 FIND_LIBRARY(libjson NAMES json-c json)
-TARGET_LINK_LIBRARIES(uhttpd ubox dl json_script blobmsg_json ${libjson} ${LIBS})
+TARGET_LINK_LIBRARIES(uhttpd ${ubox} dl ${json_script} ${blobmsg_json} ${libjson} ${LIBS})
 
 SET(PLUGINS "")
 IF(LUA_SUPPORT)
@@ -78,10 +82,11 @@ IF(UCODE_SUPPORT)
 ENDIF()
 
 IF(UBUS_SUPPORT)
+	FIND_LIBRARY(ubus NAMES ubus)
 	SET(PLUGINS ${PLUGINS} uhttpd_ubus)
 	ADD_DEFINITIONS(-DHAVE_UBUS)
 	ADD_LIBRARY(uhttpd_ubus MODULE ubus.c)
-	TARGET_LINK_LIBRARIES(uhttpd_ubus ubus ubox blobmsg_json ${libjson})
+	TARGET_LINK_LIBRARIES(uhttpd_ubus ${ubus} ${ubox} ${blobmsg_json} ${libjson})
 ENDIF()
 
 IF(PLUGINS)
