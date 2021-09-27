@@ -588,7 +588,7 @@ static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *o
 	struct blob_attr *sig, *attr;
 	struct list_data *data = priv;
 	int rem, rem2;
-	void *t, *o;
+	void *t, *o=NULL;
 
 	if (!data->verbose) {
 		blobmsg_add_string(data->buf, NULL, obj->path);
@@ -598,8 +598,12 @@ static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *o
 	if (!obj->signature)
 		return;
 
-	if (data->add_object)
+	if (data->add_object) {
 		o = blobmsg_open_table(data->buf, obj->path);
+		if (!o)
+			return;
+	}
+
 	blob_for_each_attr(sig, obj->signature, rem) {
 		t = blobmsg_open_table(data->buf, blobmsg_name(sig));
 		rem2 = blobmsg_data_len(sig);
@@ -630,6 +634,7 @@ static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *o
 		}
 		blobmsg_close_table(data->buf, t);
 	}
+
 	if (data->add_object)
 		blobmsg_close_table(data->buf, o);
 }
