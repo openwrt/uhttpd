@@ -33,6 +33,9 @@
 #include <libubus.h>
 #include <json-c/json.h>
 #endif
+#ifdef HAVE_UCODE
+#include <ucode/vm.h>
+#endif
 #ifdef HAVE_TLS
 #include <libubox/ustream-ssl.h>
 #endif
@@ -58,6 +61,15 @@ struct lua_prefix {
 	const char *prefix;
 	void *ctx;
 };
+
+#ifdef HAVE_UCODE
+struct ucode_prefix {
+	struct list_head list;
+	const char *handler;
+	const char *prefix;
+	uc_vm_t ctx;
+};
+#endif
 
 struct config {
 	const char *docroot;
@@ -85,6 +97,9 @@ struct config {
 	int events_retry;
 	struct list_head cgi_alias;
 	struct list_head lua_prefix;
+#ifdef HAVE_UCODE
+	struct list_head ucode_prefix;
+#endif
 };
 
 struct auth_realm {

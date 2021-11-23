@@ -188,6 +188,9 @@ static void init_defaults_pre(void)
 	conf.cgi_path = "/sbin:/usr/sbin:/bin:/usr/bin";
 	INIT_LIST_HEAD(&conf.cgi_alias);
 	INIT_LIST_HEAD(&conf.lua_prefix);
+#if HAVE_UCODE
+	INIT_LIST_HEAD(&conf.ucode_prefix);
+#endif
 }
 
 static void init_defaults_post(void)
@@ -241,6 +244,25 @@ static void add_lua_prefix(const char *prefix, const char *handler) {
 }
 #endif
 
+#ifdef HAVE_UCODE
+static void add_ucode_prefix(const char *prefix, const char *handler) {
+	struct ucode_prefix *p;
+	char *pprefix, *phandler;
+
+	p = calloc_a(sizeof(*p),
+	             &pprefix, strlen(prefix) + 1,
+	             &phandler, strlen(handler) + 1);
+
+	if (!p)
+		return;
+
+	p->prefix = strcpy(pprefix, prefix);
+	p->handler = strcpy(phandler, handler);
+
+	list_add_tail(&p->list, &conf.ucode_prefix);
+}
+#endif
+
 int main(int argc, char **argv)
 {
 	struct alias *alias;
@@ -256,6 +278,9 @@ int main(int argc, char **argv)
 #ifdef HAVE_LUA
 	const char *lua_prefix = NULL, *lua_handler = NULL;
 #endif
+#ifdef HAVE_UCODE
+	const char *ucode_prefix = NULL, *ucode_handler = NULL;
+#endif
 
 	BUILD_BUG_ON(sizeof(uh_buf) < PATH_MAX);
 
@@ -263,7 +288,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "A:aC:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:P:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "A:aC:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -475,6 +500,38 @@ int main(int argc, char **argv)
 			                "ignoring -%c\n", ch);
 			break;
 #endif
+#ifdef HAVE_UCODE
+		case 'o':
+		case 'O':
+			if (ch == 'o') {
+				if (ucode_prefix)
+					fprintf(stderr, "uhttpd: Ignoring previous -%c %s\n",
+					        ch, ucode_prefix);
+
+				ucode_prefix = optarg;
+			}
+			else {
+				if (ucode_handler)
+					fprintf(stderr, "uhttpd: Ignoring previous -%c %s\n",
+					        ch, ucode_handler);
+
+				ucode_handler = optarg;
+			}
+
+			if (ucode_prefix && ucode_handler) {
+				add_ucode_prefix(ucode_prefix, ucode_handler);
+				ucode_prefix = NULL;
+				ucode_handler = NULL;
+			}
+
+			break;
+#else
+		case 'o':
+		case 'O':
+			fprintf(stderr, "uhttpd: ucode support not compiled, "
+			                "ignoring -%c\n", ch);
+			break;
+#endif
 #ifdef HAVE_UBUS
 		case 'a':
 			conf.ubus_noauth = 1;
@@ -547,6 +604,15 @@ int main(int argc, char **argv)
 	}
 
 	if (!list_empty(&conf.lua_prefix) && uh_plugin_init("uhttpd_lua.so"))
+		return 1;
+#endif
+#ifdef HAVE_UCODE
+	if (ucode_handler || ucode_prefix) {
+		fprintf(stderr, "Need handler and prefix to enable ucode support\n");
+		return 1;
+	}
+
+	if (!list_empty(&conf.ucode_prefix) && uh_plugin_init("uhttpd_ucode.so"))
 		return 1;
 #endif
 #ifdef HAVE_UBUS

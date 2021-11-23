@@ -10,6 +10,7 @@ ADD_DEFINITIONS(-D_FILE_OFFSET_BITS=64 -Os -Wall -Werror -Wmissing-declarations 
 OPTION(TLS_SUPPORT "TLS support" ON)
 OPTION(LUA_SUPPORT "Lua support" ON)
 OPTION(UBUS_SUPPORT "ubus support" ON)
+OPTION(UCODE_SUPPORT "ucode support" ON)
 
 IF(APPLE)
   INCLUDE_DIRECTORIES(/opt/local/include)
@@ -67,6 +68,13 @@ IF(LUA_SUPPORT)
 	ADD_DEFINITIONS(-DHAVE_LUA ${LUA_CFLAGS})
 	ADD_LIBRARY(uhttpd_lua MODULE lua.c)
 	TARGET_LINK_LIBRARIES(uhttpd_lua ${LUA_LIBS} m dl)
+ENDIF()
+
+IF(UCODE_SUPPORT)
+	SET(PLUGINS ${PLUGINS} uhttpd_ucode)
+	ADD_DEFINITIONS(-DHAVE_UCODE)
+	ADD_LIBRARY(uhttpd_ucode MODULE ucode.c)
+	TARGET_LINK_LIBRARIES(uhttpd_ucode ucode ${libjson})
 ENDIF()
 
 IF(UBUS_SUPPORT)
