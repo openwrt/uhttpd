@@ -189,7 +189,7 @@ int uh_socket_bind(const char *host, const char *port, bool tls)
 
 		l->fd.fd = sock;
 		l->tls = tls;
-		l->addr = *(struct sockaddr_in6 *)p->ai_addr;
+		memcpy(&l->addr, p->ai_addr, p->ai_addrlen);
 		list_add_tail(&l->list, &listeners);
 		bound++;
 
