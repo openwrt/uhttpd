@@ -151,8 +151,12 @@ static int usage(const char *name)
 		"	-n count        Maximum allowed number of concurrent script requests\n"
 		"	-N count        Maximum allowed number of concurrent connections\n"
 #ifdef HAVE_LUA
-		"	-l string       URL prefix for Lua handler, default is '/lua'\n"
-		"	-L file         Lua handler script, omit to disable Lua\n"
+		"	-l string       URL prefix for Lua handler\n"
+		"	-L file         Path to Lua handler script, -l and -L may be repeated in pairs\n"
+#endif
+#ifdef HAVE_UCODE
+		"	-o string       URL prefix for ucode handler\n"
+		"	-O file         Path to ucode handler script, -o and -O may be repeated in pairs\n"
 #endif
 #ifdef HAVE_UBUS
 		"	-u string       URL prefix for UBUS via JSON-RPC handler\n"
