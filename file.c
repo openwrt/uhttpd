@@ -546,7 +546,8 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 	}
 
 	uh_file_response_200(cl, NULL);
-	ustream_printf(cl->us, "Content-Type: text/html\r\n\r\n");
+	ustream_printf(cl->us, "Content-Type: text/html; charset=%s\r\n\r\n",
+		conf.dirlist_charset ? conf.dirlist_charset : "UTF-8");
 
 	uh_chunk_printf(cl,
 		"<html><head><title>Index of %s</title></head>"

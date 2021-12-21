@@ -81,6 +81,7 @@ struct config {
 	const char *cgi_path;
 	const char *ubus_prefix;
 	const char *ubus_socket;
+	const char *dirlist_charset;
 	int no_symlinks;
 	int no_dirlists;
 	int network_timeout;

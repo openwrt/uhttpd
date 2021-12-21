@@ -144,6 +144,7 @@ static int usage(const char *name)
 #endif
 		"	-h directory    Specify the document root, default is '.'\n"
 		"	-E string       Use given virtual URL as 404 error handler\n"
+		"	-b string       Use given charset for directory listings, default to UTF-8\n"
 		"	-I string       Use given filename as index for directories, multiple allowed\n"
 		"	-S              Do not follow symbolic links outside of the docroot\n"
 		"	-D              Do not allow directory listings, send 403 instead\n"
@@ -292,7 +293,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "A:aC:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -362,6 +363,10 @@ int main(int argc, char **argv)
 				exit(1);
 			}
 			uh_index_add(optarg);
+			break;
+
+		case 'b':
+			conf.dirlist_charset = optarg;
 			break;
 
 		case 'S':
