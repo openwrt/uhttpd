@@ -220,7 +220,7 @@ uh_ucode_state_init(struct ucode_prefix *ucode)
 {
 	char *syntax_error = NULL;
 	uc_vm_t *vm = &ucode->ctx;
-	uc_function_t *handler;
+	uc_program_t *handler;
 	uc_vm_status_t status;
 	uc_source_t *src;
 	uc_value_t *v;
@@ -275,6 +275,7 @@ uh_ucode_state_init(struct ucode_prefix *ucode)
 	status = uc_vm_execute(vm, handler, &v);
 	exitcode = (int)ucv_int64_get(v);
 
+	uc_program_put(handler);
 	ucv_put(v);
 
 	switch (status) {
