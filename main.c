@@ -328,6 +328,7 @@ int main(int argc, char **argv)
 		case 'p':
 			optarg = strdup(optarg);
 			bound += add_listener_arg(optarg, (ch == 's'));
+			free(optarg);
 			break;
 
 		case 'h':
