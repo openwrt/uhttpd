@@ -199,8 +199,8 @@ uh_ucode_exception(uc_vm_t *vm, uc_exception_t *ex)
 		return;
 
 	printf("Status: 500 Internal Server Error\r\n\r\n"
-       "Exception while executing ucode program %s:\n",
-       current_prefix->handler);
+	       "Exception while executing ucode program %s:\n",
+	       current_prefix->handler);
 
 	switch (ex->type) {
 	case EXCEPTION_SYNTAX:    printf("Syntax error");    break;
