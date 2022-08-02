@@ -155,7 +155,7 @@ static void relay_close_if_done(struct uloop_timeout *timeout)
 
 	while (ustream_poll(&r->sfd.stream));
 
-	if (!(r->process_done || s->eof) || ustream_pending_data(s, false))
+	if (!(r->process_done || s->eof) || (ustream_pending_data(s, false) && !r->header_cb))
 		return;
 
 	uh_relay_close(r, r->ret);
