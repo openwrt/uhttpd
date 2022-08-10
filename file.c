@@ -49,6 +49,7 @@ struct deferred_request {
 	struct dispatch_handler *d;
 	struct client *cl;
 	struct path_info pi;
+	char *url;
 	bool called, path;
 };
 
@@ -631,7 +632,7 @@ static void uh_file_data(struct client *cl, struct path_info *pi, int fd)
 	file_write_cb(cl);
 }
 
-static bool __handle_file_request(struct client *cl, char *url);
+static bool __handle_file_request(struct client *cl, char *url, bool is_error_handler);
 
 static void uh_file_request(struct client *cl, const char *url,
 			    struct path_info *pi, struct blob_attr **tb)
@@ -684,7 +685,7 @@ error:
 		req->redirect_status = 403;
 		error_handler = alloca(strlen(conf.error_handler) + 1);
 		strcpy(error_handler, conf.error_handler);
-		if (__handle_file_request(cl, error_handler))
+		if (__handle_file_request(cl, error_handler, true))
 			return;
 	}
 
@@ -728,10 +729,8 @@ dispatch_find(const char *url, struct path_info *pi)
 }
 
 static void
-uh_invoke_script(struct client *cl, struct dispatch_handler *d, struct path_info *pi)
+uh_invoke_script(struct client *cl, struct dispatch_handler *d, char *url, struct path_info *pi)
 {
-	char *url = blobmsg_data(blob_data(cl->hdr.head));
-
 	n_requests++;
 	d->handle_request(cl, url, pi);
 }
@@ -752,7 +751,7 @@ static void uh_complete_request(struct client *cl)
 		cl = dr->cl;
 		dr->called = true;
 		cl->dispatch.data_blocked = false;
-		uh_invoke_script(cl, dr->d, dr->path ? &dr->pi : NULL);
+		uh_invoke_script(cl, dr->d, dr->url, dr->path ? &dr->pi : NULL);
 		client_poll_post_data(cl);
 		ustream_poll(cl->us);
 	}
@@ -787,10 +786,10 @@ static int field_len(const char *ptr)
 	_field(query)
 
 static void
-uh_defer_script(struct client *cl, struct dispatch_handler *d, struct path_info *pi)
+uh_defer_script(struct client *cl, struct dispatch_handler *d, char *url, struct path_info *pi)
 {
 	struct deferred_request *dr;
-	char *_root, *_phys, *_name, *_info, *_query;
+	char *_url, *_root, *_phys, *_name, *_info, *_query;
 
 	cl->dispatch.req_free = uh_free_pending_request;
 
@@ -798,7 +797,7 @@ uh_defer_script(struct client *cl, struct dispatch_handler *d, struct path_info 
 		/* allocate enough memory to duplicate all path_info strings in one block */
 #undef _field
 #define _field(_name) &_##_name, field_len(pi->_name),
-		dr = calloc_a(sizeof(*dr), path_info_fields NULL);
+		dr = calloc_a(sizeof(*dr), &_url, strlen(url), path_info_fields NULL);
 
 		memcpy(&dr->pi, pi, sizeof(*pi));
 		dr->path = true;
@@ -808,11 +807,12 @@ uh_defer_script(struct client *cl, struct dispatch_handler *d, struct path_info 
 #define _field(_name) if (pi->_name) dr->pi._name = strcpy(_##_name, pi->_name);
 		path_info_fields
 	} else {
-		dr = calloc(1, sizeof(*dr));
+		dr = calloc_a(sizeof(*dr), &_url, strlen(url), NULL);
 	}
 
 	cl->dispatch.req_data = dr;
 	cl->dispatch.data_blocked = true;
+	dr->url = strcpy(_url, url);
 	dr->cl = cl;
 	dr->d = d;
 	list_add(&dr->list, &pending_requests);
@@ -825,13 +825,13 @@ uh_invoke_handler(struct client *cl, struct dispatch_handler *d, char *url, stru
 		return d->handle_request(cl, url, pi);
 
 	if (n_requests >= conf.max_script_requests)
-		return uh_defer_script(cl, d, pi);
+		return uh_defer_script(cl, d, url, pi);
 
 	cl->dispatch.req_free = uh_complete_request;
-	uh_invoke_script(cl, d, pi);
+	uh_invoke_script(cl, d, url, pi);
 }
 
-static bool __handle_file_request(struct client *cl, char *url)
+static bool __handle_file_request(struct client *cl, char *url, bool is_error_handler)
 {
 	static const struct blobmsg_policy hdr_policy[__HDR_MAX] = {
 		[HDR_AUTHORIZATION] = { "authorization", BLOBMSG_TYPE_STRING },
@@ -845,6 +845,16 @@ static bool __handle_file_request(struct client *cl, char *url)
 	struct blob_attr *tb[__HDR_MAX];
 	struct path_info *pi;
 	char *user, *pass, *auth;
+
+	if (is_error_handler) {
+		d = dispatch_find(url, NULL);
+
+		if (d) {
+			uh_invoke_handler(cl, d, url, NULL);
+
+			return true;
+		}
+	}
 
 	pi = uh_path_lookup(cl, url);
 	if (!pi)
@@ -931,7 +941,7 @@ void uh_handle_request(struct client *cl)
 	if (d)
 		return uh_invoke_handler(cl, d, url, NULL);
 
-	if (__handle_file_request(cl, url))
+	if (__handle_file_request(cl, url, false))
 		return;
 
 	if (uh_handler_run(cl, &url, true)) {
@@ -939,7 +949,7 @@ void uh_handle_request(struct client *cl)
 			return;
 
 		uh_handler_run(cl, &url, false);
-		if (__handle_file_request(cl, url))
+		if (__handle_file_request(cl, url, false))
 			return;
 	}
 
@@ -947,7 +957,7 @@ void uh_handle_request(struct client *cl)
 	if (conf.error_handler) {
 		error_handler = alloca(strlen(conf.error_handler) + 1);
 		strcpy(error_handler, conf.error_handler);
-		if (__handle_file_request(cl, error_handler))
+		if (__handle_file_request(cl, error_handler, true))
 			return;
 	}
 
