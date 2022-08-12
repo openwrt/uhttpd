@@ -231,6 +231,7 @@ uh_ucode_state_init(struct ucode_prefix *ucode)
 
 	uc_vm_init(vm, &config);
 	uc_stdlib_load(uc_vm_scope_get(vm));
+	uc_search_path_init(&config.module_search_path);
 
 	/* build uhttpd api table */
 	v = ucv_object_new(vm);
