@@ -215,7 +215,7 @@ bool uh_path_match(const char *prefix, const char *url)
 	if (strncmp(url, prefix, len) != 0)
 		return false;
 
-	return url[len] == '/' || url[len] == 0;
+	return url[len] == '/' || url[len] == '?' || url[len] == 0;
 }
 
 char *uh_split_header(char *str)
