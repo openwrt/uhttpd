@@ -115,20 +115,22 @@ uh_ucode_recv(uc_vm_t *vm, size_t nargs)
 static uc_value_t *
 uh_ucode_send(uc_vm_t *vm, size_t nargs)
 {
-	uc_value_t *val = uc_fn_arg(0);
-	ssize_t len;
+	uc_value_t *val;
+	size_t arridx;
+	ssize_t len = 0;
 	char *p;
 
-	if (ucv_type(val) == UC_STRING) {
-		len = write(STDOUT_FILENO, ucv_string_get(val), ucv_string_length(val));
-	}
-	else if (val != NULL) {
-		p = ucv_to_string(vm, val);
-		len = p ? write(STDOUT_FILENO, p, strlen(p)) : 0;
-		free(p);
-	}
-	else {
-		len = 0;
+	for (arridx = 0; arridx < nargs; arridx++) {
+		val = uc_fn_arg(arridx);
+
+		if (ucv_type(val) == UC_STRING) {
+			len += write(STDOUT_FILENO, ucv_string_get(val), ucv_string_length(val));
+		}
+		else if (val != NULL) {
+			p = ucv_to_string(vm, val);
+			len += p ? write(STDOUT_FILENO, p, strlen(p)) : 0;
+			free(p);
+		}
 	}
 
 	return ucv_int64_new(len);
