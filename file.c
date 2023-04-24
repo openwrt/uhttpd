@@ -797,7 +797,7 @@ uh_defer_script(struct client *cl, struct dispatch_handler *d, char *url, struct
 		/* allocate enough memory to duplicate all path_info strings in one block */
 #undef _field
 #define _field(_name) &_##_name, field_len(pi->_name),
-		dr = calloc_a(sizeof(*dr), &_url, strlen(url), path_info_fields NULL);
+		dr = calloc_a(sizeof(*dr), &_url, strlen(url) + 1, path_info_fields NULL);
 
 		memcpy(&dr->pi, pi, sizeof(*pi));
 		dr->path = true;
@@ -807,7 +807,7 @@ uh_defer_script(struct client *cl, struct dispatch_handler *d, char *url, struct
 #define _field(_name) if (pi->_name) dr->pi._name = strcpy(_##_name, pi->_name);
 		path_info_fields
 	} else {
-		dr = calloc_a(sizeof(*dr), &_url, strlen(url), NULL);
+		dr = calloc_a(sizeof(*dr), &_url, strlen(url) + 1, NULL);
 	}
 
 	cl->dispatch.req_data = dr;
