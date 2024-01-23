@@ -158,10 +158,8 @@ uh_client_error(struct client *cl, int code, const char *summary, const char *fm
 	 * interpreted as part of the next request. The alternative
 	 * would be to read and discard the request body here.
 	 */
-	if (r->transfer_chunked || r->content_length > 0) {
-		cl->state = CLIENT_STATE_CLOSE;
+	if (r->transfer_chunked || r->content_length > 0)
 		cl->request.connection_close = true;
-	}
 
 	uh_request_done(cl);
 }
