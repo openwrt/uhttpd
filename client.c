@@ -168,6 +168,9 @@ uh_client_error(struct client *cl, int code, const char *summary, const char *fm
 
 static void uh_header_error(struct client *cl, int code, const char *summary)
 {
+	/* Signal closure to emit the correct connection headers */
+	cl->request.connection_close = true;
+
 	uh_client_error(cl, code, summary, NULL);
 	uh_connection_close(cl);
 }
