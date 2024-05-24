@@ -141,17 +141,6 @@ uh_client_error(struct client *cl, int code, const char *summary, const char *fm
 	struct http_request *r = &cl->request;
 	va_list arg;
 
-	uh_http_header(cl, code, summary);
-	ustream_printf(cl->us, "Content-Type: text/html\r\n\r\n");
-
-	uh_chunk_printf(cl, "<h1>%s</h1>", summary);
-
-	if (fmt) {
-		va_start(arg, fmt);
-		uh_chunk_vprintf(cl, fmt, arg);
-		va_end(arg);
-	}
-
 	/* Close the connection even when keep alive is set, when it
 	 * contains a request body, as it was not read and we are
 	 * currently out of sync. Without handling this the body will be
@@ -161,6 +150,17 @@ uh_client_error(struct client *cl, int code, const char *summary, const char *fm
 	if (r->transfer_chunked || r->content_length > 0) {
 		cl->state = CLIENT_STATE_CLOSE;
 		cl->request.connection_close = true;
+	}
+
+	uh_http_header(cl, code, summary);
+	ustream_printf(cl->us, "Content-Type: text/html\r\n\r\n");
+
+	uh_chunk_printf(cl, "<h1>%s</h1>", summary);
+
+	if (fmt) {
+		va_start(arg, fmt);
+		uh_chunk_vprintf(cl, fmt, arg);
+		va_end(arg);
 	}
 
 	uh_request_done(cl);
