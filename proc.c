@@ -218,6 +218,10 @@ static void proc_handle_header(struct relay *r, const char *name, const char *va
 		cl->dispatch.proc.status_code = atoi(buf);
 		return;
 	}
+	else if (!strcasecmp(name, "Content-Length") ||
+	         !strcasecmp(name, "Transfer-Encoding")) {
+		cl->request.disable_chunked = true;
+	}
 
 	blobmsg_add_string(&cl->dispatch.proc.hdr, name, val);
 }
