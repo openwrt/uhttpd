@@ -480,7 +480,8 @@ static int dirent_cmp(const struct dirent **a, const struct dirent **b)
 }
 
 static void list_entries(struct client *cl, struct dirent **files, int count,
-			 const char *path, char *local_path)
+			 const char *path, char *local_path,
+			 size_t local_path_len, size_t max_name_len)
 {
 	const char *suffix = "/";
 	const char *type = "directory";
@@ -491,7 +492,7 @@ static void list_entries(struct client *cl, struct dirent **files, int count,
 	char buf[128];
 	int i;
 
-	file = local_path + strlen(local_path);
+	file = local_path + local_path_len;
 	for (i = 0; i < count; i++) {
 		const char *name = files[i]->d_name;
 		bool dir = !!(files[i]->d_type & DT_DIR);
@@ -499,7 +500,7 @@ static void list_entries(struct client *cl, struct dirent **files, int count,
 		if (name[0] == '.' && name[1] == 0)
 			goto next;
 
-		sprintf(file, "%s", name);
+		snprintf(file, max_name_len, "%s", name);
 		if (stat(local_path, &s))
 			goto next;
 
@@ -538,7 +539,7 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 {
 	struct dirent **files = NULL;
 	char *escaped_path = uh_htmlescape(pi->name);
-	int count = 0;
+	int count = 0, path_len = 0;
 
 	if (!escaped_path)
 	{
@@ -557,8 +558,11 @@ static void uh_file_dirlist(struct client *cl, struct path_info *pi)
 
 	count = scandir(pi->phys, &files, NULL, dirent_cmp);
 	if (count > 0) {
-		strcpy(uh_buf, pi->phys);
-		list_entries(cl, files, count, escaped_path, uh_buf);
+		path_len = snprintf(uh_buf, sizeof(uh_buf), "%s", pi->phys);
+
+		if (path_len > 0 && path_len < sizeof(uh_buf))
+			list_entries(cl, files, count, escaped_path, uh_buf,
+			             path_len, sizeof(uh_buf) - path_len);
 	}
 	free(escaped_path);
 	free(files);
