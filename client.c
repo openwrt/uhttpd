@@ -234,6 +234,39 @@ static bool client_init_cb(struct client *cl, char *buf, int len)
 	return true;
 }
 
+static bool request_header_check(struct client *cl)
+{
+	size_t num_transfer_encoding = 0;
+	size_t num_content_length = 0;
+	struct blob_attr *cur;
+	int rem;
+
+	blob_for_each_attr(cur, cl->hdr.head, rem) {
+		if (!strcasecmp(blobmsg_name(cur), "Transfer-Encoding"))
+			num_transfer_encoding++;
+		else if (!strcasecmp(blobmsg_name(cur), "Content-Length"))
+			num_content_length++;
+	}
+
+	/* Section 3.3.2 of RFC 7230: messages with multiple Content-Length headers
+	   containing different values MUST be rejected as invalid. Messages with
+	   multiple Content-Length headers containing identical values MAY be
+	   rejected as invalid */
+	if (num_content_length > 1) {
+		uh_header_error(cl, 400, "Bad Request");
+		return false;
+	}
+
+	/* Section 3.3.3 of RFC 7230: messages with both Content-Length and
+	   Transfer-Encoding ought to be handled as an error */
+	if (num_content_length > 0 && num_transfer_encoding > 0) {
+		uh_header_error(cl, 400, "Bad Request");
+		return false;
+	}
+
+	return true;
+}
+
 static bool rfc1918_filter_check(struct client *cl)
 {
 	if (!conf.rfc1918_filter)
@@ -297,6 +330,9 @@ static bool tls_redirect_check(struct client *cl)
 static void client_header_complete(struct client *cl)
 {
 	struct http_request *r = &cl->request;
+
+	if (!request_header_check(cl))
+		return;
 
 	if (!rfc1918_filter_check(cl))
 		return;
