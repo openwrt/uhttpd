@@ -95,6 +95,8 @@ void uh_chunk_eof(struct client *cl)
 		return;
 
 	ustream_printf(cl->us, "0\r\n\r\n");
+
+	cl->request.disable_chunked = true;
 }
 
 /* blen is the size of buf; slen is the length of src.  The input-string need
