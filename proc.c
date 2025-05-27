@@ -239,6 +239,9 @@ static void proc_handle_header_end(struct relay *r)
 
 	ustream_printf(cl->us, "\r\n");
 
+	/* Begin DATA phase so chunked-EOF will be emitted */
+	cl->state = CLIENT_STATE_DATA;
+
 	if (cl->request.method == UH_HTTP_MSG_HEAD)
 		r->skip_data = true;
 }
