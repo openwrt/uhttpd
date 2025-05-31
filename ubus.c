@@ -989,7 +989,7 @@ uh_ubus_check_url(const char *url)
 static int
 uh_ubus_init(void)
 {
-	const char* max_post_size_via_env = getenv("UH_UBUS_MAX_POST_SIZE");
+	const char *max_post_size_via_env = getenv("UH_UBUS_MAX_POST_SIZE");
 	if (max_post_size_via_env) {
 		g_ubus_max_post_size = atoi(max_post_size_via_env);
 		if (g_ubus_max_post_size <= 0 || g_ubus_max_post_size > (UH_UBUS_MAX_POST_SIZE) * 16) {
