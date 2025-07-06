@@ -56,7 +56,8 @@ void uh_chunk_vprintf(struct client *cl, const char *format, va_list arg)
 	va_list arg2;
 	int len;
 
-	if (cl->state != CLIENT_STATE_DATA)
+	if (cl->state != CLIENT_STATE_DATA &&
+	    cl->state != CLIENT_STATE_DONE)
 		return;
 
 	uloop_timeout_set(&cl->timeout, conf.network_timeout * 1000);
@@ -91,7 +92,8 @@ void uh_chunk_eof(struct client *cl)
 	if (!uh_use_chunked(cl))
 		return;
 
-	if (cl->state != CLIENT_STATE_DATA)
+	if (cl->state != CLIENT_STATE_DATA &&
+	    cl->state != CLIENT_STATE_DONE)
 		return;
 
 	ustream_printf(cl->us, "0\r\n\r\n");
