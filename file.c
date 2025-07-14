@@ -339,11 +339,15 @@ static char *uh_file_header(struct client *cl, int idx)
 static void uh_file_response_ok_hdrs(struct client *cl, struct stat *s)
 {
 	char buf[128];
+	struct extra_header *eh;
 
 	if (s) {
 		ustream_printf(cl->us, "ETag: %s\r\n", uh_file_mktag(s, buf, sizeof(buf)));
 		ustream_printf(cl->us, "Last-Modified: %s\r\n",
 			       uh_file_unix2date(s->st_mtime, buf, sizeof(buf)));
+	}
+	list_for_each_entry(eh, &conf.extra_header, list) {
+		ustream_printf(cl->us, "%s\r\n", eh->header);
 	}
 	ustream_printf(cl->us, "Date: %s\r\n",
 		       uh_file_unix2date(time(NULL), buf, sizeof(buf)));
