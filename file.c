@@ -645,6 +645,13 @@ static void uh_file_request(struct client *cl, const char *url,
 	struct http_request *req = &cl->request;
 	char *error_handler, *escaped_url;
 
+	/* Close keep alive connections when the request message contains a body,
+	 * as we're not going to consume it for file requests. Otherwise the body
+	 * would be interpreted as part of the next request.
+	 */
+	if (req->transfer_chunked || req->content_length > 0)
+		cl->request.connection_close = true;
+
 	switch (cl->request.method) {
 	case UH_HTTP_MSG_GET:
 	case UH_HTTP_MSG_POST:

@@ -141,6 +141,15 @@ uh_client_error(struct client *cl, int code, const char *summary, const char *fm
 	struct http_request *r = &cl->request;
 	va_list arg;
 
+	/* Close the connection even when keep alive is set, when it
+	 * contains a request body, as it was not read and we are
+	 * currently out of sync. Without handling this the body will be
+	 * interpreted as part of the next request. The alternative
+	 * would be to read and discard the request body here.
+	 */
+	if (r->transfer_chunked || r->content_length > 0)
+		cl->request.connection_close = true;
+
 	uh_http_header(cl, code, summary);
 	ustream_printf(cl->us, "Content-Type: text/html\r\n\r\n");
 
@@ -152,20 +161,14 @@ uh_client_error(struct client *cl, int code, const char *summary, const char *fm
 		va_end(arg);
 	}
 
-	/* Close the connection even when keep alive is set, when it
-	 * contains a request body, as it was not read and we are
-	 * currently out of sync. Without handling this the body will be
-	 * interpreted as part of the next request. The alternative
-	 * would be to read and discard the request body here.
-	 */
-	if (r->transfer_chunked || r->content_length > 0)
-		cl->request.connection_close = true;
-
 	uh_request_done(cl);
 }
 
 static void uh_header_error(struct client *cl, int code, const char *summary)
 {
+	/* Signal closure to emit the correct connection headers */
+	cl->request.connection_close = true;
+
 	uh_client_error(cl, code, summary, NULL);
 	uh_connection_close(cl);
 }
@@ -226,6 +229,7 @@ static bool client_init_cb(struct client *cl, char *buf, int len)
 
 	*newline = 0;
 	blob_buf_init(&cl->hdr, 0);
+	cl->http_code = 0;
 	cl->state = client_parse_request(cl, buf);
 	ustream_consume(cl->us, newline + 2 - buf);
 	if (cl->state == CLIENT_STATE_DONE)
@@ -359,81 +363,301 @@ static void client_header_complete(struct client *cl)
 	uh_handle_request(cl);
 }
 
-static void client_parse_header(struct client *cl, char *data)
+enum {
+	ALPHA  = (1 << 0),
+	CHAR   = (1 << 1),
+	CTL    = (1 << 2),
+	DIGIT  = (1 << 3),
+	HEXDIG = (1 << 4),
+	VCHAR  = (1 << 5),
+	WSP    = (1 << 6),
+	DELIM  = (1 << 7),
+	VDELIM = DELIM | VCHAR,
+	VALPHA = ALPHA | VCHAR,
+	XALPHA = ALPHA | HEXDIG | VCHAR,
+	XDIGIT = DIGIT | HEXDIG | VCHAR,
+};
+
+static uint8_t chartypes[256] = {
+/* 00..07 */ CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,
+/* 08..0f */ CTL,    WSP,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,
+/* 10..17 */ CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,
+/* 18..1f */ CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,
+/* 20..27 */ WSP,    VCHAR,  VDELIM, VCHAR,  VCHAR,  VCHAR,  VCHAR,  VCHAR,
+/* 28..2f */ VDELIM, VDELIM, VCHAR,  VCHAR,  VDELIM, VCHAR,  VCHAR,  VDELIM,
+/* 30..37 */ XDIGIT, XDIGIT, XDIGIT, XDIGIT, XDIGIT, XDIGIT, XDIGIT, XDIGIT,
+/* 38..3f */ XDIGIT, XDIGIT, VDELIM, VDELIM, VDELIM, VDELIM, VDELIM, VDELIM,
+/* 40..47 */ VDELIM, XALPHA, XALPHA, XALPHA, XALPHA, XALPHA, XALPHA, VALPHA,
+/* 48..4f */ VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA,
+/* 50..57 */ VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA,
+/* 58..5f */ VALPHA, VALPHA, VALPHA, VDELIM, VDELIM, VDELIM, VCHAR,  VCHAR,
+/* 60..67 */ VCHAR,  XALPHA, XALPHA, XALPHA, XALPHA, XALPHA, XALPHA, VALPHA,
+/* 68..6f */ VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA,
+/* 70..77 */ VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA,
+/* 78..7f */ VALPHA, VALPHA, VALPHA, VDELIM, VCHAR,  VDELIM, VCHAR,  CTL,
+/* 80..ff: no flags */
+};
+
+static size_t
+skip_token(char **buf, char *end)
+{
+	size_t len = 0;
+
+	while (*buf < end && (chartypes[(uint8_t)**buf] & VDELIM) == VCHAR) {
+		(*buf)++;
+		len++;
+	}
+
+	return len;
+}
+
+static size_t
+skip_qstring(char **buf, char *end)
+{
+	bool esc = false;
+	size_t len;
+	char *p;
+
+	if (*buf + 2 >= end)
+		return 0; /* need at least opening and closing quote */
+
+	if (**buf != '"')
+		return 0; /* no opening quote */
+
+	for (p = *buf + 1, len = 1; p + 1 < end; p++, len++) {
+		if (esc) {
+			if (chartypes[(uint8_t)*p] & CTL)
+				return 0; /* no control chars allowed */
+
+			esc = false;
+			continue;
+		}
+
+		if (*p == '"')
+			break;
+
+		if (*p == '\\') {
+			esc = true;
+			continue;
+		}
+
+		if (chartypes[(uint8_t)*p] & CTL)
+			return 0; /* no control chars allowed */
+	}
+
+	if (esc)
+		return 0; /* eof after '\' */
+
+	if (*p != '"')
+		return 0; /* unterminated string */
+
+	*buf = p + 1;
+
+	return len + 1;
+}
+
+static size_t
+skip_whitespace(char **buf, char *end)
+{
+	size_t len = 0;
+
+	while (*buf < end && (chartypes[(uint8_t)**buf] & WSP)) {
+		(*buf)++;
+		len++;
+	}
+
+	return len;
+}
+
+static size_t
+skip_charws(char **buf, char *end, char c)
+{
+	size_t len = 0;
+	char *p = *buf;
+
+	while (p < end && (chartypes[(uint8_t)*p] & WSP))
+		p++, len++;
+
+	if (p == end || *p != c)
+		return 0; /* expected char not present */
+
+	*buf = p + 1;
+
+	return len + 1;
+}
+
+static int
+parse_chunksize(char *buf, char *end)
+{
+	int size = 0;
+	char *p;
+
+	for (p = buf; p < end; p++) {
+		int n;
+
+		if (chartypes[(uint8_t)*p] & DIGIT)
+			n = *p - '0';
+		else if (chartypes[(uint8_t)*p] & HEXDIG)
+			n = 10 + (*p|32) - 'a';
+		else
+			break;
+
+		if (size > INT_MAX / 16)
+			return -1; /* overflow */
+
+		size *= 16;
+
+		if (size > INT_MAX - n)
+			return -1; /* overflow */
+
+		size += n;
+	}
+
+	if (p == buf)
+		return -1; /* empty size */
+
+	/* parse optional extensions */
+	while (skip_charws(&p, end, ';')) {
+		skip_whitespace(&p, end);
+
+		if (!skip_token(&p, end))
+			return -1; /* expected chunk-ext-name */
+
+		if (skip_charws(&p, end, '=')) {
+			skip_whitespace(&p, end);
+
+			if (!skip_qstring(&p, end) && !skip_token(&p, end))
+				return -1; /* expected chunk-ext-val */
+		}
+	}
+
+	if (p < end)
+		return -1; /* garbage after size and/or chunk extensions */
+
+	return size;
+}
+
+static int
+parse_contentlength(char *buf, char *end)
+{
+	int size = 0;
+	char *p;
+
+	for (p = buf; p < end; p++) {
+		int n;
+
+		if (chartypes[(uint8_t)*p] & DIGIT)
+			n = *p - '0';
+		else
+			break;
+
+		if (size > INT_MAX / 10)
+			return -1; /* overflow */
+
+		size *= 10;
+
+		if (size > INT_MAX - n)
+			return -1; /* overflow */
+
+		size += n;
+	}
+
+	if (p == buf)
+		return -1; /* empty size */
+
+	if (p < end)
+		return -1; /* garbage after size and/or chunk extensions */
+
+	return size;
+}
+
+static void client_parse_header(struct client *cl, char *data, char *end)
 {
 	struct http_request *r = &cl->request;
-	char *err;
-	char *name;
-	char *val;
+	char *p = data;
 
-	if (!*data) {
+	if (data == end) {
 		uloop_timeout_cancel(&cl->timeout);
 		cl->state = CLIENT_STATE_DATA;
 		client_header_complete(cl);
 		return;
 	}
 
-	val = uh_split_header(data);
-	if (!val) {
-		cl->state = CLIENT_STATE_DONE;
+	size_t namelen = skip_token(&p, end);
+
+	if (namelen == 0 || p == end || *p++ != ':') {
+		uh_header_error(cl, 400, "Bad Request");
 		return;
 	}
 
-	for (name = data; *name; name++)
-		if (isupper(*name))
-			*name = tolower(*name);
+	skip_whitespace(&p, end);
 
-	if (!strcmp(data, "expect")) {
-		if (!strcasecmp(val, "100-continue"))
-			r->expect_cont = true;
-		else {
-			uh_header_error(cl, 412, "Precondition Failed");
-			return;
-		}
-	} else if (!strcmp(data, "content-length")) {
-		r->content_length = strtoul(val, &err, 0);
-		if ((err && *err) || r->content_length < 0) {
-			uh_header_error(cl, 400, "Bad Request");
-			return;
-		}
-	} else if (!strcmp(data, "transfer-encoding")) {
-		if (!strcmp(val, "chunked"))
-			r->transfer_chunked = true;
-	} else if (!strcmp(data, "connection")) {
-		if (!strcasecmp(val, "close"))
-			r->connection_close = true;
-	} else if (!strcmp(data, "user-agent")) {
-		char *str;
+	size_t vallen = (p < end) ? end - p : 0;
 
-		if (strstr(val, "Opera"))
-			r->ua = UH_UA_OPERA;
-		else if ((str = strstr(val, "MSIE ")) != NULL) {
-			r->ua = UH_UA_MSIE_NEW;
-			if (str[5] && str[6] == '.') {
-				switch (str[5]) {
-				case '6':
-					if (strstr(str, "SV1"))
+	while (vallen > 0 && (chartypes[(uint8_t)p[vallen - 1]] & WSP))
+		vallen--;
+
+	if (vallen) {
+		char *val = p;
+
+		for (size_t i = 0; i < namelen; i++)
+			data[i] = tolower(data[i]);
+
+		data[namelen] = 0;
+		val[vallen] = 0;
+
+		if (!strcmp(data, "expect")) {
+			if (!strcasecmp(val, "100-continue"))
+				r->expect_cont = true;
+			else {
+				uh_header_error(cl, 412, "Precondition Failed");
+				return;
+			}
+		} else if (!strcmp(data, "content-length")) {
+			r->content_length = parse_contentlength(val, val + vallen);
+
+			if (r->content_length < 0) {
+				uh_header_error(cl, 400, "Bad Request");
+				return;
+			}
+		} else if (!strcmp(data, "transfer-encoding")) {
+			if (!strcmp(val, "chunked"))
+				r->transfer_chunked = true;
+		} else if (!strcmp(data, "connection")) {
+			if (!strcasecmp(val, "close"))
+				r->connection_close = true;
+		} else if (!strcmp(data, "user-agent")) {
+			char *str;
+
+			if (strstr(val, "Opera"))
+				r->ua = UH_UA_OPERA;
+			else if ((str = strstr(val, "MSIE ")) != NULL) {
+				r->ua = UH_UA_MSIE_NEW;
+				if (str[5] && str[6] == '.') {
+					switch (str[5]) {
+					case '6':
+						if (strstr(str, "SV1"))
+							break;
+						/* fall through */
+					case '5':
+					case '4':
+						r->ua = UH_UA_MSIE_OLD;
 						break;
-					/* fall through */
-				case '5':
-				case '4':
-					r->ua = UH_UA_MSIE_OLD;
-					break;
+					}
 				}
 			}
+			else if (strstr(val, "Chrome/"))
+				r->ua = UH_UA_CHROME;
+			else if (strstr(val, "Safari/") && strstr(val, "Mac OS X"))
+				r->ua = UH_UA_SAFARI;
+			else if (strstr(val, "Gecko/"))
+				r->ua = UH_UA_GECKO;
+			else if (strstr(val, "Konqueror"))
+				r->ua = UH_UA_KONQUEROR;
 		}
-		else if (strstr(val, "Chrome/"))
-			r->ua = UH_UA_CHROME;
-		else if (strstr(val, "Safari/") && strstr(val, "Mac OS X"))
-			r->ua = UH_UA_SAFARI;
-		else if (strstr(val, "Gecko/"))
-			r->ua = UH_UA_GECKO;
-		else if (strstr(val, "Konqueror"))
-			r->ua = UH_UA_KONQUEROR;
+
+		blobmsg_add_string(&cl->hdr, data, val);
 	}
-
-
-	blobmsg_add_string(&cl->hdr, data, val);
 
 	cl->state = CLIENT_STATE_HEADER;
 }
@@ -484,16 +708,21 @@ void client_poll_post_data(struct client *cl)
 		if (!sep)
 			break;
 
-		*sep = 0;
-
-		r->content_length = strtoul(buf + offset, &sep, 16);
+		r->content_length = parse_chunksize(buf + offset, sep);
 		r->transfer_chunked++;
 		ustream_consume(cl->us, sep + 2 - buf);
 
-		/* invalid chunk length */
-		if ((sep && *sep) || r->content_length < 0) {
+		/* invalid chunk length, abort processing and drop connection */
+		if (r->content_length < 0) {
 			r->content_length = 0;
 			r->transfer_chunked = 0;
+
+			/* headers already sent */
+			if (cl->http_code != 0)
+				uh_connection_close(cl);
+			else
+				uh_header_error(cl, 400, "Bad Request");
+
 			break;
 		}
 
@@ -532,8 +761,7 @@ static bool client_header_cb(struct client *cl, char *buf, int len)
 	if (!newline)
 		return false;
 
-	*newline = 0;
-	client_parse_header(cl, buf);
+	client_parse_header(cl, buf, newline);
 	line_len = newline + 2 - buf;
 	ustream_consume(cl->us, line_len);
 	if (cl->state == CLIENT_STATE_DATA)
