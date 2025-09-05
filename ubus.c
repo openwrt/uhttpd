@@ -362,6 +362,14 @@ static void uh_ubus_subscription_notification_remove_cb(struct ubus_context *ctx
 	ops->request_done(cl);
 }
 
+/* Cleanup function to unregister ubus subscriber when HTTP client closes */
+static void uh_ubus_subscription_free(struct client *cl)
+{
+	struct dispatch_ubus *du = &cl->dispatch.ubus;
+	if (du->sub.obj.id)
+		ubus_unregister_subscriber(ctx, &du->sub);
+}
+
 static void uh_ubus_handle_get_subscribe(struct client *cl, const char *path)
 {
 	struct dispatch_ubus *du = &cl->dispatch.ubus;
@@ -398,6 +406,9 @@ static void uh_ubus_handle_get_subscribe(struct client *cl, const char *path)
 
 	if (conf.events_retry)
 		ops->chunk_printf(cl, "retry: %d\n", conf.events_retry);
+
+	/* Ensure cleanup on client disconnect */
+	cl->dispatch.free = uh_ubus_subscription_free;
 
 	return;
 
