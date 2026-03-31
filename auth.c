@@ -25,6 +25,30 @@
 #endif
 #include "uhttpd.h"
 
+/*
+ * Constant-time string comparison to prevent timing-based password oracle.
+ * Returns true only if both strings are equal in length and content.
+ */
+static bool uh_pass_compare(const char *a, const char *b)
+{
+	unsigned int diff = 0;
+	size_t la, lb, i, maxlen;
+
+	if (!a || !b)
+		return false;
+
+	la = strlen(a);
+	lb = strlen(b);
+	maxlen = la > lb ? la : lb;
+
+	for (i = 0; i < maxlen; i++)
+		diff |= (unsigned char)(i < la ? a[i] : 0) ^
+		        (unsigned char)(i < lb ? b[i] : 0);
+
+	diff |= (unsigned int)(la ^ lb);
+	return diff == 0;
+}
+
 static LIST_HEAD(auth_realms);
 
 void uh_auth_add(const char *path, const char *user, const char *pass)
@@ -129,8 +153,8 @@ bool uh_auth_check(struct client *cl, const char *path, const char *auth,
 	 * modern crypt(3) hash ($id$salt$...). It blocks the case where a client
 	 * sends the stored hash itself as the password and matches via strcmp. */
 	if (user_match &&
-	    ((realm->pass[0] != '$' && !strcmp(pass, realm->pass)) ||
-	     !strcmp(crypt(pass, realm->pass), realm->pass))) {
+	    ((realm->pass[0] != '$' && uh_pass_compare(pass, realm->pass)) ||
+	     uh_pass_compare(crypt(pass, realm->pass), realm->pass))) {
 		if (uptr)
 			*uptr = user;
 
