@@ -19,6 +19,8 @@
 
 #include <libubox/blobmsg.h>
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 
 #include "uhttpd.h"
 #include "tls.h"
@@ -391,11 +393,15 @@ static void client_parse_header(struct client *cl, char *data)
 			return;
 		}
 	} else if (!strcmp(data, "content-length")) {
-		r->content_length = strtoul(val, &err, 10);
-		if ((err && *err) || r->content_length < 0) {
+		long length;
+
+		errno = 0;
+		length = strtol(val, &err, 10);
+		if ((err && *err) || errno || length < 0 || length > INT_MAX) {
 			uh_header_error(cl, 400, "Bad Request");
 			return;
 		}
+		r->content_length = (int)length;
 	} else if (!strcmp(data, "transfer-encoding")) {
 		if (!strcmp(val, "chunked"))
 			r->transfer_chunked = true;
