@@ -457,6 +457,7 @@ void client_poll_post_data(struct client *cl)
 
 	while (1) {
 		char *sep;
+		long chunk_len;
 		int offset = 0;
 		int cur_len;
 
@@ -492,17 +493,21 @@ void client_poll_post_data(struct client *cl)
 
 		*sep = 0;
 
-		r->content_length = strtoul(buf + offset, &sep, 16);
-		if (r->transfer_chunked < 2)
-			r->transfer_chunked++;
-		ustream_consume(cl->us, sep + 2 - buf);
+		errno = 0;
+		chunk_len = strtol(buf + offset, &sep, 16);
 
 		/* invalid chunk length */
-		if ((sep && *sep) || r->content_length < 0) {
+		if ((sep && *sep) || errno || chunk_len < 0 || chunk_len > INT_MAX) {
+			ustream_consume(cl->us, sep + 2 - buf);
 			r->content_length = 0;
 			r->transfer_chunked = 0;
 			break;
 		}
+
+		if (r->transfer_chunked < 2)
+			r->transfer_chunked++;
+		ustream_consume(cl->us, sep + 2 - buf);
+		r->content_length = (int)chunk_len;
 
 		/* empty chunk == eof */
 		if (!r->content_length) {
