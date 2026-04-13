@@ -176,7 +176,7 @@ int uh_b64decode(char *buf, int blen, const void *src, int slen)
 	int len = 0;
 	int i = 0;
 
-	for (i = 0; (i <= slen) && (str[i] != 0); i++)
+	for (i = 0; (i < slen) && (str[i] != 0); i++)
 	{
 		cin = str[i];
 
