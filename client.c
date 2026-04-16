@@ -391,7 +391,7 @@ static void client_parse_header(struct client *cl, char *data)
 			return;
 		}
 	} else if (!strcmp(data, "content-length")) {
-		r->content_length = strtoul(val, &err, 0);
+		r->content_length = strtoul(val, &err, 10);
 		if ((err && *err) || r->content_length < 0) {
 			uh_header_error(cl, 400, "Bad Request");
 			return;
