@@ -206,7 +206,7 @@ struct dispatch_proc {
 	struct uloop_fd wrfd;
 	struct relay r;
 	int status_code;
-	char *status_msg;
+	char status_msg[64];
 };
 
 struct dispatch_handler {

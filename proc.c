@@ -201,7 +201,6 @@ static void proc_handle_close(struct relay *r, int ret)
 
 static void proc_handle_header(struct relay *r, const char *name, const char *val)
 {
-	static char status_buf[64];
 	struct client *cl = r->cl;
 	char *sep;
 	char buf[4];
@@ -213,8 +212,8 @@ static void proc_handle_header(struct relay *r, const char *name, const char *va
 
 		memcpy(buf, val, 3);
 		buf[3] = 0;
-		snprintf(status_buf, sizeof(status_buf), "%s", sep + 1);
-		cl->dispatch.proc.status_msg = status_buf;
+		snprintf(cl->dispatch.proc.status_msg,
+			 sizeof(cl->dispatch.proc.status_msg), "%s", sep + 1);
 		cl->dispatch.proc.status_code = atoi(buf);
 		return;
 	}
@@ -337,7 +336,7 @@ bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
 
 	blob_buf_init(&proc->hdr, 0);
 	proc->status_code = 200;
-	proc->status_msg = "OK";
+	strcpy(proc->status_msg, "OK");
 
 	if (pipe(rfd))
 		return false;
