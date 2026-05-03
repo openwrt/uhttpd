@@ -487,7 +487,8 @@ void client_poll_post_data(struct client *cl)
 		*sep = 0;
 
 		r->content_length = strtoul(buf + offset, &sep, 16);
-		r->transfer_chunked++;
+		if (r->transfer_chunked < 2)
+			r->transfer_chunked++;
 		ustream_consume(cl->us, sep + 2 - buf);
 
 		/* invalid chunk length */
