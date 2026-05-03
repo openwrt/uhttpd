@@ -581,6 +581,9 @@ static void file_write_cb(struct client *cl)
 		if (r < 0) {
 			if (errno == EINTR)
 				continue;
+
+			uh_request_done(cl);
+			return;
 		}
 
 		if (!r) {
