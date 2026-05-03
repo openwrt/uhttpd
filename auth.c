@@ -125,8 +125,11 @@ bool uh_auth_check(struct client *cl, const char *path, const char *auth,
 	if (!req->realm)
 		return true;
 
+	/* The leading '$' check distinguishes a stored plaintext password from a
+	 * modern crypt(3) hash ($id$salt$...). It blocks the case where a client
+	 * sends the stored hash itself as the password and matches via strcmp. */
 	if (user_match &&
-	    (!strcmp(pass, realm->pass) ||
+	    ((realm->pass[0] != '$' && !strcmp(pass, realm->pass)) ||
 	     !strcmp(crypt(pass, realm->pass), realm->pass))) {
 		if (uptr)
 			*uptr = user;
