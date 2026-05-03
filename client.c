@@ -294,10 +294,10 @@ static bool tls_redirect_check(struct client *cl)
 		return true;
 
 	blob_for_each_attr(cur, cl->hdr.head, rem) {
-		if (!strncmp(blobmsg_name(cur), "host", 4))
+		if (!strcmp(blobmsg_name(cur), "host"))
 			host = blobmsg_get_string(cur);
 
-		if (!strncmp(blobmsg_name(cur), "URL", 3))
+		if (!strcmp(blobmsg_name(cur), "URL"))
 			url = blobmsg_get_string(cur);
 
 		if (url && host)
