@@ -380,8 +380,8 @@ static void client_parse_header(struct client *cl, char *data)
 	}
 
 	for (name = data; *name; name++)
-		if (isupper(*name))
-			*name = tolower(*name);
+		if (isupper((unsigned char)*name))
+			*name = tolower((unsigned char)*name);
 
 	if (!strcmp(data, "expect")) {
 		if (!strcasecmp(val, "100-continue"))

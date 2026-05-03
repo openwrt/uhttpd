@@ -119,7 +119,9 @@ int uh_urldecode(char *buf, int blen, const char *src, int slen)
 			continue;
 		}
 
-		if (i + 2 >= slen || !isxdigit(src[i + 1]) || !isxdigit(src[i + 2]))
+		if (i + 2 >= slen ||
+		    !isxdigit((unsigned char)src[i + 1]) ||
+		    !isxdigit((unsigned char)src[i + 2]))
 			return -2;
 
 		buf[len++] = (char)(16 * hex(src[i+1]) + hex(src[i+2]));
@@ -141,7 +143,7 @@ int uh_urlencode(char *buf, int blen, const char *src, int slen)
 
 	for (i = 0; (i < slen) && (len < blen); i++)
 	{
-		if( isalnum(src[i]) || (src[i] == '-') || (src[i] == '_') ||
+		if( isalnum((unsigned char)src[i]) || (src[i] == '-') || (src[i] == '_') ||
 		    (src[i] == '.') || (src[i] == '~') )
 		{
 			buf[len++] = src[i];
@@ -231,7 +233,7 @@ char *uh_split_header(char *str)
 	*val = 0;
 	val++;
 
-	while (isspace(*val))
+	while (isspace((unsigned char)*val))
 		val++;
 
 	return val;
