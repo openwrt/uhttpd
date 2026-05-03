@@ -453,7 +453,7 @@ int main(int argc, char **argv)
 					optarg[opt] = ' ';
 
 			/* opt now contains strlen(optarg) -- no need to re-scan */
-			if (uh_urldecode(port, opt, optarg, opt) < 0) {
+			if (uh_urldecode(port, opt + 1, optarg, opt) < 0) {
 				fprintf(stderr, "uhttpd: invalid encoding\n");
 				return -1;
 			}

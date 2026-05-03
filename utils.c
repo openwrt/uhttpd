@@ -100,8 +100,9 @@ void uh_chunk_eof(struct client *cl)
 }
 
 /* blen is the size of buf; slen is the length of src.  The input-string need
-** not be, and the output string will not be, null-terminated.  Returns the
-** length of the decoded string, -1 on buffer overflow, -2 on malformed string. */
+** not be null-terminated. The output string is always null-terminated when
+** blen > 0. Returns the length of the decoded string (excluding the trailing
+** NUL), -1 on buffer overflow, -2 on malformed string. */
 int uh_urldecode(char *buf, int blen, const char *src, int slen)
 {
 	int i;
@@ -112,7 +113,10 @@ int uh_urldecode(char *buf, int blen, const char *src, int slen)
 		(((x) <= 'F') ? ((x) - 'A' + 10) : \
 			((x) - 'a' + 10)))
 
-	for (i = 0; (i < slen) && (len < blen); i++)
+	if (blen <= 0)
+		return -1;
+
+	for (i = 0; (i < slen) && (len < blen - 1); i++)
 	{
 		if (src[i] != '%') {
 			buf[len++] = src[i];
