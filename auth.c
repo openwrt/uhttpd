@@ -72,9 +72,43 @@ void uh_auth_add(const char *path, const char *user, const char *pass)
 #endif
 		if (!new_pass) {
 			pwd = getpwnam(&pass[3]);
-			if (pwd && pwd->pw_passwd && pwd->pw_passwd[0] &&
-			    pwd->pw_passwd[0] != '!')
+			if (pwd && pwd->pw_passwd && pwd->pw_passwd[0])
 				new_pass = pwd->pw_passwd;
+		}
+
+		/* Only honour a real crypt(3) hash. Anything else from shadow
+		 * splits into two cases that mirror login(1) semantics:
+		 *
+		 *  - Empty password field ("root:::..."): the system account
+		 *    permits passwordless login, so leave new_pass empty and
+		 *    let the realm be dropped at the next check, which leaves
+		 *    the protected path unauthenticated.
+		 *
+		 *  - Any other non-'$' value ("*", "x", "!", "!!", "*LK*",
+		 *    "*NP*", "!hash" lock prefix, ...): the account is locked
+		 *    or its credential is a placeholder. Without this guard
+		 *    uh_auth_check's plaintext compare branch would fire (it
+		 *    runs whenever realm->pass does not start with '$') and a
+		 *    client could authenticate by sending the placeholder
+		 *    verbatim as the password. Bind the realm to a sentinel
+		 *    that starts with '$' (skipping the plaintext branch) and
+		 *    that crypt(3) cannot produce (failing the hash branch),
+		 *    so every request gets 401 instead of silent public
+		 *    access. */
+		if (!new_pass) {
+			fprintf(stderr, "uhttpd: account '%s' does not "
+				"exist; denying all access to %s\n",
+				&pass[3], path);
+			new_pass = "$";
+		} else if (new_pass[0] && new_pass[0] != '$') {
+			fprintf(stderr, "uhttpd: account '%s' is locked "
+				"or has a non-crypt password; denying all "
+				"access to %s\n", &pass[3], path);
+			new_pass = "$";
+		} else if (!new_pass[0]) {
+			fprintf(stderr, "uhttpd: account '%s' has no "
+				"password set; leaving %s unauthenticated\n",
+				&pass[3], path);
 		}
 	} else {
 		new_pass = pass;
