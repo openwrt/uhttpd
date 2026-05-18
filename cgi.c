@@ -31,6 +31,12 @@ void uh_interpreter_add(const char *ext, const char *path)
 	in = calloc_a(sizeof(*in),
 		&new_ext, strlen(ext) + 1,
 		&new_path, strlen(path) + 1);
+	if (!in) {
+		fprintf(stderr,
+			"uhttpd: OOM while adding CGI interpreter (%s -> %s)\n",
+			ext, path);
+		return;
+	}
 
 	in->ext = strcpy(new_ext, ext);
 	in->path = strcpy(new_path, path);

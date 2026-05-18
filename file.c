@@ -793,7 +793,7 @@ uh_free_pending_request(struct client *cl)
 	free(dr);
 }
 
-static int field_len(const char *ptr)
+static size_t field_len(const char *ptr)
 {
 	if (!ptr)
 		return 0;
@@ -821,6 +821,10 @@ uh_defer_script(struct client *cl, struct dispatch_handler *d, char *url, struct
 #undef _field
 #define _field(_name) &_##_name, field_len(pi->_name),
 		dr = calloc_a(sizeof(*dr), &_url, strlen(url) + 1, path_info_fields NULL);
+		if (!dr) {
+			uh_client_error(cl, 500, "Internal Server Error", "Out of memory");
+			return;
+		}
 
 		memcpy(&dr->pi, pi, sizeof(*pi));
 		dr->path = true;
@@ -831,6 +835,10 @@ uh_defer_script(struct client *cl, struct dispatch_handler *d, char *url, struct
 		path_info_fields
 	} else {
 		dr = calloc_a(sizeof(*dr), &_url, strlen(url) + 1, NULL);
+		if (!dr) {
+			uh_client_error(cl, 500, "Internal Server Error", "Out of memory");
+			return;
+		}
 	}
 
 	cl->dispatch.req_data = dr;
