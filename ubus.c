@@ -942,6 +942,12 @@ static int uh_ubus_data_send(struct client *cl, const char *data, int len)
 	return len;
 
 error:
+	/* We abort parsing the request body here without consuming the
+	 * remaining declared Content-Length bytes. Close the connection even
+	 * when keep alive is set, as the unread body suffix would otherwise be
+	 * interpreted as the start of the next request (request smuggling).
+	 */
+	cl->request.connection_close = true;
 	uh_ubus_single_error(cl, ERROR_PARSE);
 	return 0;
 }
