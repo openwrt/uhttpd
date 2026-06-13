@@ -509,6 +509,11 @@ void client_poll_post_data(struct client *cl)
 			ustream_consume(cl->us, sep + 2 - buf);
 			r->content_length = 0;
 			r->transfer_chunked = 0;
+			/* The remaining buffered body is left unconsumed and its
+			 * framing is now unknown. Close the connection so the
+			 * leftover bytes are not reparsed as the next request
+			 * (request smuggling). */
+			r->connection_close = true;
 			break;
 		}
 
