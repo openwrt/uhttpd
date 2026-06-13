@@ -403,8 +403,16 @@ static void client_parse_header(struct client *cl, char *data)
 		}
 		r->content_length = (int)length;
 	} else if (!strcmp(data, "transfer-encoding")) {
-		if (!strcmp(val, "chunked"))
+		/* RFC 9112 6.1: transfer-coding tokens are case-insensitive.
+		 * Reject any coding we do not implement instead of silently
+		 * ignoring it, otherwise the body framing would be unknown and
+		 * the unread body could be parsed as the next request. */
+		if (!strcasecmp(val, "chunked")) {
 			r->transfer_chunked = true;
+		} else {
+			uh_header_error(cl, 501, "Not Implemented");
+			return;
+		}
 	} else if (!strcmp(data, "connection")) {
 		if (!strcasecmp(val, "close"))
 			r->connection_close = true;
