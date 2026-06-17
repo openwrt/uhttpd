@@ -169,6 +169,24 @@ int uh_socket_bind(const char *host, const char *port, bool tls)
 			goto error;
 		}
 
+		/*
+		 * Allow binding to an address that is not (yet) assigned to a
+		 * local interface. Without this, starting before the network is
+		 * fully configured makes bind() fail with EADDRNOTAVAIL when a
+		 * specific listen address is used, and uhttpd never recovers.
+		 * Best effort: ignore failures so older kernels keep working.
+		 */
+#if defined(IP_FREEBIND)
+		if (p->ai_family == AF_INET &&
+		    setsockopt(sock, IPPROTO_IP, IP_FREEBIND, &yes, sizeof(yes)) < 0)
+			perror("setsockopt(IP_FREEBIND)");
+#endif
+#if defined(IPV6_FREEBIND)
+		if (p->ai_family == AF_INET6 &&
+		    setsockopt(sock, IPPROTO_IPV6, IPV6_FREEBIND, &yes, sizeof(yes)) < 0)
+			perror("setsockopt(IPV6_FREEBIND)");
+#endif
+
 		/* bind */
 		if (bind(sock, p->ai_addr, p->ai_addrlen) < 0) {
 			perror("bind()");
