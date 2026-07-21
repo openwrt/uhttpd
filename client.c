@@ -361,7 +361,7 @@ static void client_header_complete(struct client *cl)
 	uh_handle_request(cl);
 }
 
-static void client_parse_header(struct client *cl, char *data)
+static void client_parse_header(struct client *cl, char *data, size_t line_len)
 {
 	struct http_request *r = &cl->request;
 	char *err;
@@ -372,6 +372,18 @@ static void client_parse_header(struct client *cl, char *data)
 		uloop_timeout_cancel(&cl->timeout);
 		cl->state = CLIENT_STATE_DATA;
 		client_header_complete(cl);
+		return;
+	}
+
+	/* Cap header count and cumulative header bytes so a connection
+	 * cannot pin an unbounded amount of memory in cl->hdr; line_len
+	 * includes the CRLF stripped from the line by the caller.
+	 */
+	r->header_count++;
+	r->header_bytes += line_len;
+	if (r->header_count > UH_LIMIT_HEADER_COUNT ||
+	    r->header_bytes > UH_LIMIT_HEADER_BYTES) {
+		uh_header_error(cl, 431, "Request Header Fields Too Large");
 		return;
 	}
 
@@ -557,9 +569,9 @@ static bool client_header_cb(struct client *cl, char *buf, int len)
 	if (!newline)
 		return false;
 
-	*newline = 0;
-	client_parse_header(cl, buf);
 	line_len = newline + 2 - buf;
+	*newline = 0;
+	client_parse_header(cl, buf, line_len);
 	ustream_consume(cl->us, line_len);
 	if (cl->state == CLIENT_STATE_DATA)
 		return client_data_cb(cl, newline + 2, len - line_len);
