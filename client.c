@@ -492,8 +492,23 @@ void client_poll_post_data(struct client *cl)
 		if (!r->transfer_chunked)
 			break;
 
-		if (r->transfer_chunked > 1)
+		if (r->transfer_chunked > 1) {
+			if (len < 2)
+				break;
+
+			/* the chunk data must be followed by a literal CRLF;
+			 * anything else means the framing is ambiguous, so
+			 * bail out and close the connection instead of
+			 * silently resyncing on unrelated bytes */
+			if (buf[0] != '\r' || buf[1] != '\n') {
+				r->content_length = 0;
+				r->transfer_chunked = 0;
+				r->connection_close = true;
+				break;
+			}
+
 			offset = 2;
+		}
 
 		sep = strstr(buf + offset, "\r\n");
 		if (!sep)
