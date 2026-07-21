@@ -44,6 +44,11 @@
 
 #define UH_LIMIT_CLIENTS	64
 
+/* per-request cumulative header limits, aligned with common HTTP server
+ * defaults (Apache LimitRequestFields=100, Node.js max-header-size=16 KiB) */
+#define UH_LIMIT_HEADER_COUNT	100
+#define UH_LIMIT_HEADER_BYTES	16384
+
 #define __enum_header(_name, _val) HDR_##_name,
 #define __blobmsg_header(_name, _val) [HDR_##_name] = { .name = #_val, .type = BLOBMSG_TYPE_STRING },
 
@@ -149,6 +154,8 @@ struct http_request {
 	bool disable_chunked;
 	uint8_t transfer_chunked;
 	const struct auth_realm *realm;
+	size_t header_count;
+	size_t header_bytes;
 };
 
 enum client_state {
