@@ -477,6 +477,7 @@ void client_poll_post_data(struct client *cl)
 
 	while (1) {
 		char *sep;
+		char *end;
 		long chunk_len;
 		int offset = 0;
 		int cur_len;
@@ -526,14 +527,19 @@ void client_poll_post_data(struct client *cl)
 		if (!sep)
 			break;
 
+		end = sep;
 		*sep = 0;
 
 		errno = 0;
 		chunk_len = strtol(buf + offset, &sep, 16);
 
-		/* invalid chunk length */
-		if ((sep && *sep) || errno || chunk_len < 0 || chunk_len > INT_MAX) {
-			ustream_consume(cl->us, sep + 2 - buf);
+		/* invalid chunk length, including an empty chunk size line
+		 * (strtol returns 0 with sep pointing to the start of the
+		 * string when no hex digits are present, which would be
+		 * indistinguishable from a valid 0-size final chunk) */
+		if (sep == buf + offset || (sep && *sep) || errno ||
+		    chunk_len < 0 || chunk_len > INT_MAX) {
+			ustream_consume(cl->us, end + 2 - buf);
 			r->content_length = 0;
 			r->transfer_chunked = 0;
 			/* The remaining buffered body is left unconsumed and its
@@ -546,7 +552,7 @@ void client_poll_post_data(struct client *cl)
 
 		if (r->transfer_chunked < 2)
 			r->transfer_chunked++;
-		ustream_consume(cl->us, sep + 2 - buf);
+		ustream_consume(cl->us, end + 2 - buf);
 		r->content_length = (int)chunk_len;
 
 		/* empty chunk == eof */
