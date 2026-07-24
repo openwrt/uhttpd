@@ -361,6 +361,89 @@ static void client_header_complete(struct client *cl)
 	uh_handle_request(cl);
 }
 
+enum {
+	ALPHA  = (1 << 0),
+	CHAR   = (1 << 1),
+	CTL    = (1 << 2),
+	DIGIT  = (1 << 3),
+	HEXDIG = (1 << 4),
+	VCHAR  = (1 << 5),
+	WSP    = (1 << 6),
+	DELIM  = (1 << 7),
+	VDELIM = DELIM | VCHAR,
+	VALPHA = ALPHA | VCHAR,
+	XALPHA = ALPHA | HEXDIG | VCHAR,
+	XDIGIT = DIGIT | HEXDIG | VCHAR,
+};
+
+static uint8_t chartypes[256] = {
+/* 00..07 */ CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,
+/* 08..0f */ CTL,    WSP,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,
+/* 10..17 */ CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,
+/* 18..1f */ CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,
+/* 20..27 */ WSP,    VCHAR,  VDELIM, VCHAR,  VCHAR,  VCHAR,  VCHAR,  VCHAR,
+/* 28..2f */ VDELIM, VDELIM, VCHAR,  VCHAR,  VDELIM, VCHAR,  VCHAR,  VDELIM,
+/* 30..37 */ XDIGIT, XDIGIT, XDIGIT, XDIGIT, XDIGIT, XDIGIT, XDIGIT, XDIGIT,
+/* 38..3f */ XDIGIT, XDIGIT, VDELIM, VDELIM, VDELIM, VDELIM, VDELIM, VDELIM,
+/* 40..47 */ VDELIM, XALPHA, XALPHA, XALPHA, XALPHA, XALPHA, XALPHA, VALPHA,
+/* 48..4f */ VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA,
+/* 50..57 */ VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA,
+/* 58..5f */ VALPHA, VALPHA, VALPHA, VDELIM, VDELIM, VDELIM, VCHAR,  VCHAR,
+/* 60..67 */ VCHAR,  XALPHA, XALPHA, XALPHA, XALPHA, XALPHA, XALPHA, VALPHA,
+/* 68..6f */ VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA,
+/* 70..77 */ VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA,
+/* 78..7f */ VALPHA, VALPHA, VALPHA, VDELIM, VCHAR,  VDELIM, VCHAR,  CTL,
+/* 80..ff: no flags */
+};
+
+static size_t
+parse_chunksize(char *buf, char *end)
+{
+	int size = 0;
+	char *p;
+
+	for (p = buf; p < end; p++) {
+		int n;
+
+		if (chartypes[(uint8_t)*p] & DIGIT)
+			n = *p - '0';
+		else if (chartypes[(uint8_t)*p] & HEXDIG)
+			n = 10 + (*p | 32) - 'a';
+		else
+			break;
+
+		if (size > INT_MAX / 16)
+			return -1; /* overflow */
+
+		size *= 16;
+
+		if (size > INT_MAX - n)
+			return -1; /* overflow */
+
+		size += n;
+	}
+
+	if (p == buf)
+		return -1; /* empty size */
+
+	/* skip optional chunk extensions (;name=value) */
+	while (p < end && *p == ';') {
+		p++;
+		while (p < end && (chartypes[(uint8_t)*p] & (ALPHA | DIGIT)))
+			p++;
+		if (p < end && *p == '=') {
+			p++;
+			while (p < end && (chartypes[(uint8_t)*p] & (ALPHA | DIGIT)))
+				p++;
+		}
+	}
+
+	if (p < end)
+		return -1; /* garbage after size and/or extensions */
+
+	return size;
+}
+
 static void client_parse_header(struct client *cl, char *data, size_t line_len)
 {
 	struct http_request *r = &cl->request;
@@ -477,7 +560,6 @@ void client_poll_post_data(struct client *cl)
 
 	while (1) {
 		char *sep;
-		char *end;
 		long chunk_len;
 		int offset = 0;
 		int cur_len;
@@ -527,19 +609,14 @@ void client_poll_post_data(struct client *cl)
 		if (!sep)
 			break;
 
-		end = sep;
-		*sep = 0;
-
-		errno = 0;
-		chunk_len = strtol(buf + offset, &sep, 16);
+		chunk_len = parse_chunksize(buf + offset, sep);
 
 		/* invalid chunk length, including an empty chunk size line
 		 * (strtol returns 0 with sep pointing to the start of the
 		 * string when no hex digits are present, which would be
 		 * indistinguishable from a valid 0-size final chunk) */
-		if (sep == buf + offset || (sep && *sep) || errno ||
-		    chunk_len < 0 || chunk_len > INT_MAX) {
-			ustream_consume(cl->us, end + 2 - buf);
+		if (chunk_len < 0) {
+			ustream_consume(cl->us, sep + 2 - buf);
 			r->content_length = 0;
 			r->transfer_chunked = 0;
 			/* The remaining buffered body is left unconsumed and its
@@ -552,7 +629,7 @@ void client_poll_post_data(struct client *cl)
 
 		if (r->transfer_chunked < 2)
 			r->transfer_chunked++;
-		ustream_consume(cl->us, end + 2 - buf);
+		ustream_consume(cl->us, sep + 2 - buf);
 		r->content_length = (int)chunk_len;
 
 		/* empty chunk == eof */
