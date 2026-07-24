@@ -496,7 +496,7 @@ static void client_parse_header(struct client *cl, char *data, size_t line_len)
 		 * ignoring it, otherwise the body framing would be unknown and
 		 * the unread body could be parsed as the next request. */
 		if (!strcasecmp(val, "chunked")) {
-			r->transfer_chunked = true;
+			r->transfer_chunked = CHUNKED_FIRST;
 		} else {
 			uh_header_error(cl, 501, "Not Implemented");
 			return;
@@ -580,7 +580,38 @@ void client_poll_post_data(struct client *cl)
 		if (!r->transfer_chunked)
 			break;
 
-		if (r->transfer_chunked > 1) {
+		if (r->transfer_chunked == CHUNKED_TRAILER) {
+			char *tsep = strstr(buf, "\r\n");
+
+			if (!tsep)
+				break;
+
+			if (tsep == buf) {
+				/* blank line: end of the (possibly empty) trailer
+				 * section, request framing is now complete */
+				ustream_consume(cl->us, 2);
+				r->transfer_chunked = CHUNKED_OFF;
+				break;
+			}
+
+			r->header_count++;
+			r->header_bytes += tsep + 2 - buf;
+			ustream_consume(cl->us, tsep + 2 - buf);
+
+			if (r->header_count > UH_LIMIT_HEADER_COUNT ||
+			    r->header_bytes > UH_LIMIT_HEADER_BYTES) {
+				/* Too much trailer data; the framing beyond this
+				 * point is unknown, so the connection cannot be
+				 * safely reused for a subsequent request. */
+				r->transfer_chunked = CHUNKED_OFF;
+				r->connection_close = true;
+				break;
+			}
+
+			continue;
+		}
+
+		if (r->transfer_chunked == CHUNKED_NEXT) {
 			if (len < 2)
 				break;
 
@@ -590,7 +621,7 @@ void client_poll_post_data(struct client *cl)
 			 * silently resyncing on unrelated bytes */
 			if (buf[0] != '\r' || buf[1] != '\n') {
 				r->content_length = 0;
-				r->transfer_chunked = 0;
+				r->transfer_chunked = CHUNKED_OFF;
 				r->connection_close = true;
 				break;
 			}
@@ -610,7 +641,7 @@ void client_poll_post_data(struct client *cl)
 		if (chunk_len < 0) {
 			ustream_consume(cl->us, sep + 2 - buf);
 			r->content_length = 0;
-			r->transfer_chunked = 0;
+			r->transfer_chunked = CHUNKED_OFF;
 			/* The remaining buffered body is left unconsumed and its
 			 * framing is now unknown. Close the connection so the
 			 * leftover bytes are not reparsed as the next request
@@ -619,15 +650,18 @@ void client_poll_post_data(struct client *cl)
 			break;
 		}
 
-		if (r->transfer_chunked < 2)
-			r->transfer_chunked++;
+		if (r->transfer_chunked == CHUNKED_FIRST)
+			r->transfer_chunked = CHUNKED_NEXT;
 		ustream_consume(cl->us, sep + 2 - buf);
 		r->content_length = (int)chunk_len;
 
-		/* empty chunk == eof */
+		/* empty chunk == eof, but RFC 9112 7.1.3 still permits an
+		 * optional trailer section before the request is fully
+		 * framed; drain it instead of leaving it for the next
+		 * read_cbs state to misparse as a new request. */
 		if (!r->content_length) {
-			r->transfer_chunked = false;
-			break;
+			r->transfer_chunked = CHUNKED_TRAILER;
+			continue;
 		}
 	}
 

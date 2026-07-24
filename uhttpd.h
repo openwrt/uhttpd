@@ -143,6 +143,13 @@ enum http_user_agent {
 	UH_UA_MSIE_NEW,
 };
 
+enum chunked_state {
+	CHUNKED_OFF,		/* not a chunked request */
+	CHUNKED_FIRST,		/* awaiting the first chunk-size line */
+	CHUNKED_NEXT,		/* awaiting a CRLF-prefixed chunk-size line for a subsequent chunk */
+	CHUNKED_TRAILER,	/* draining the optional trailer section after the terminal chunk */
+};
+
 struct http_request {
 	enum http_method method;
 	enum http_version version;
@@ -152,7 +159,7 @@ struct http_request {
 	bool expect_cont;
 	bool connection_close;
 	bool disable_chunked;
-	uint8_t transfer_chunked;
+	enum chunked_state transfer_chunked;
 	const struct auth_realm *realm;
 	size_t header_count;
 	size_t header_bytes;
