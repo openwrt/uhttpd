@@ -476,9 +476,25 @@ static void client_parse_header(struct client *cl, char *data, size_t line_len)
 		return;
 	}
 
-	for (name = data; *name; name++)
+	/* RFC 9110: header field names must be non-empty tokens of
+	 * TCHAR characters with no leading/trailing whitespace and
+	 * the colon must immediately follow the name. Reject malformed
+	 * header lines to prevent request smuggling via reverse proxies
+	 * that may interpret them differently. */
+	if (!*data || isspace((unsigned char)*data)) {
+		uh_header_error(cl, 400, "Bad Request");
+		return;
+	}
+
+	for (name = data; *name; name++) {
+		if (isspace((unsigned char)*name) ||
+		    (chartypes[(uint8_t)*name] & (VCHAR | DELIM)) != VCHAR) {
+			uh_header_error(cl, 400, "Bad Request");
+			return;
+		}
 		if (isupper((unsigned char)*name))
 			*name = tolower((unsigned char)*name);
+	}
 
 	if (!strcmp(data, "expect")) {
 		if (!strcasecmp(val, "100-continue"))
