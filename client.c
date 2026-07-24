@@ -396,7 +396,7 @@ static uint8_t chartypes[256] = {
 /* 80..ff: no flags */
 };
 
-static size_t
+static long
 parse_chunksize(char *buf, char *end)
 {
 	int size = 0;
@@ -611,10 +611,9 @@ void client_poll_post_data(struct client *cl)
 
 		chunk_len = parse_chunksize(buf + offset, sep);
 
-		/* invalid chunk length, including an empty chunk size line
-		 * (strtol returns 0 with sep pointing to the start of the
-		 * string when no hex digits are present, which would be
-		 * indistinguishable from a valid 0-size final chunk) */
+		/* invalid chunk length, including an empty chunk size line,
+		 * leading/trailing garbage or an overflowing value; see
+		 * parse_chunksize() */
 		if (chunk_len < 0) {
 			ustream_consume(cl->us, sep + 2 - buf);
 			r->content_length = 0;
