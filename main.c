@@ -176,6 +176,7 @@ static int usage(const char *name)
 		"	-d string       URL decode given string\n"
 		"	-r string       Specify basic auth realm\n"
 		"	-m string       MD5 crypt given string\n"
+		"	-z string       Add additional response header (can use multiple times)\n"
 		"\n", name
 	);
 	return 1;
@@ -193,6 +194,7 @@ static void init_defaults_pre(void)
 	conf.cgi_path = "/sbin:/usr/sbin:/bin:/usr/bin";
 	INIT_LIST_HEAD(&conf.cgi_alias);
 	INIT_LIST_HEAD(&conf.lua_prefix);
+	INIT_LIST_HEAD(&conf.extra_header);
 #if HAVE_UCODE
 	INIT_LIST_HEAD(&conf.ucode_prefix);
 #endif
@@ -271,6 +273,7 @@ static void add_ucode_prefix(const char *prefix, const char *handler) {
 int main(int argc, char **argv)
 {
 	struct alias *alias;
+	struct extra_header *extra_header;
 	bool nofork = false;
 	char *port;
 	int opt, ch;
@@ -293,7 +296,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qRr:Ss:T:t:U:u:Xx:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qRr:Ss:T:t:U:u:Xx:y:z:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -406,6 +409,20 @@ int main(int argc, char **argv)
 			if (alias->path)
 				*alias->path++ = 0;
 			list_add(&alias->list, &conf.cgi_alias);
+			break;
+
+		case 'z':
+			extra_header = calloc(1, sizeof(*extra_header));
+			if (!extra_header) {
+				fprintf(stderr, "Error: failed to allocate extra_header\n");
+				exit(1);
+			}
+			if (strchr(optarg, ':') == NULL) {
+				fprintf(stderr, "Error: invalid extra header (-z) - missing colon\n");
+				exit(1);
+			}
+			extra_header->header = optarg;
+			list_add(&extra_header->list, &conf.extra_header);
 			break;
 
 		case 'i':
