@@ -956,6 +956,20 @@ static char *uh_handle_alias(char *old_url)
 	return old_url;
 }
 
+static bool uh_auth_check_url(struct client *cl, const char *url)
+{
+	static const struct blobmsg_policy policy = {
+		"authorization", BLOBMSG_TYPE_STRING
+	};
+	struct blob_attr *tb;
+	const char *auth;
+
+	blobmsg_parse(&policy, 1, &tb, blob_data(cl->hdr.head), blob_len(cl->hdr.head));
+	auth = tb ? blobmsg_data(tb) : NULL;
+
+	return uh_auth_check(cl, url, auth, NULL, NULL);
+}
+
 void uh_handle_request(struct client *cl)
 {
 	struct http_request *req = &cl->request;
@@ -976,8 +990,15 @@ void uh_handle_request(struct client *cl)
 
 	req->redirect_status = 200;
 	d = dispatch_find(url, NULL);
-	if (d)
+	if (d) {
+		/* check_url handlers (lua, ucode, ubus) are dispatched here,
+		 * before the file/CGI path that performs uh_auth_check().
+		 * Enforce any matching Basic Auth realm so these handlers are
+		 * protected consistently with static files and CGI scripts. */
+		if (!uh_auth_check_url(cl, url))
+			return;
 		return uh_invoke_handler(cl, d, url, NULL);
+	}
 
 	if (__handle_file_request(cl, url, false))
 		return;
