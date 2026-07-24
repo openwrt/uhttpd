@@ -369,9 +369,9 @@ parse_chunksize(char *buf, char *end)
 	for (p = buf; p < end; p++) {
 		int n;
 
-		if (chartypes[(uint8_t)*p] & CT_DIGIT)
+		if (uh_is_digit(*p))
 			n = *p - '0';
-		else if (chartypes[(uint8_t)*p] & CT_HEXDIG)
+		else if (uh_is_hexdig(*p))
 			n = 10 + (*p | 32) - 'a';
 		else
 			break;
@@ -414,6 +414,7 @@ static void client_parse_header(struct client *cl, char *data, size_t line_len)
 	char *err;
 	char *name;
 	char *val;
+	char *p;
 
 	if (!*data) {
 		uloop_timeout_cancel(&cl->timeout);
@@ -441,22 +442,35 @@ static void client_parse_header(struct client *cl, char *data, size_t line_len)
 	}
 
 	/* RFC 9110: header field names must be non-empty tokens of
-	 * TCHAR characters with no leading/trailing whitespace and
-	 * the colon must immediately follow the name. Reject malformed
-	 * header lines to prevent request smuggling via reverse proxies
-	 * that may interpret them differently. */
-	if (!*data || uh_is_wsp(*data)) {
+	 * TCHAR characters, which already excludes whitespace (SP/HTAB
+	 * carry no VCHAR bit and so fail uh_is_tchar()) and the colon
+	 * must immediately follow the name. Reject malformed header
+	 * lines to prevent request smuggling via reverse proxies that
+	 * may interpret them differently. */
+	if (!*data) {
 		uh_header_error(cl, 400, "Bad Request");
 		return;
 	}
 
 	for (name = data; *name; name++) {
-		if (uh_is_wsp(*name) || !uh_is_tchar(*name)) {
+		if (!uh_is_tchar(*name)) {
 			uh_header_error(cl, 400, "Bad Request");
 			return;
 		}
 		if (*name >= 'A' && *name <= 'Z')
 			*name += 'a' - 'A';
+	}
+
+	/* RFC 9110 field-content only permits VCHAR/obs-text plus SP and
+	 * HTAB; reject embedded control characters (e.g. a bare CR or LF
+	 * not part of the line terminator) so a value cannot be used to
+	 * smuggle an extra header/request past this parser into one that
+	 * treats a lone CR or LF as a line break. */
+	for (p = val; *p; p++) {
+		if (uh_is_ctl(*p)) {
+			uh_header_error(cl, 400, "Bad Request");
+			return;
+		}
 	}
 
 	if (!strcmp(data, "expect")) {
