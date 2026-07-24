@@ -67,6 +67,11 @@ struct lua_prefix {
 	void *ctx;
 };
 
+struct extra_header {
+	struct list_head list;
+	const char *header;
+};
+
 #ifdef HAVE_UCODE
 struct ucode_prefix {
 	struct list_head list;
@@ -103,6 +108,7 @@ struct config {
 	int events_retry;
 	struct list_head cgi_alias;
 	struct list_head lua_prefix;
+	struct list_head extra_header;
 #ifdef HAVE_UCODE
 	struct list_head ucode_prefix;
 #endif
