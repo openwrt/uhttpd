@@ -67,6 +67,28 @@ time_t timegm (struct tm *tm);
 #define __printf(a, b)
 #endif
 
+enum { /* chartypes flags */
+	CT_ALPHA  = (1 << 0),
+	CT_DIGIT  = (1 << 3),
+	CT_HEXDIG = (1 << 4),
+	CT_VCHAR  = (1 << 5),
+	CT_WSP    = (1 << 6),
+	CT_DELIM  = (1 << 7),
+	CT_VDELIM = CT_DELIM | CT_VCHAR,
+	CT_VALPHA = CT_ALPHA | CT_VCHAR,
+	CT_XALPHA = CT_ALPHA | CT_HEXDIG | CT_VCHAR,
+	CT_XDIGIT = CT_DIGIT | CT_HEXDIG | CT_VCHAR,
+};
+
+extern uint8_t chartypes[256];
+
+/* RFC 9110 character class helpers */
+#define uh_is_tchar(c)  ((chartypes[(uint8_t)(c)] & (CT_VCHAR | CT_DELIM)) == CT_VCHAR)
+#define uh_is_wsp(c)    (chartypes[(uint8_t)(c)] & CT_WSP)
+#define uh_is_owsl(c)   (uh_is_wsp(c))   /* optional whitespace (leading) */
+#define uh_is_digit(c)  (chartypes[(uint8_t)(c)] & CT_DIGIT)
+#define uh_is_hexdig(c) (chartypes[(uint8_t)(c)] & CT_HEXDIG)
+
 int uh_urldecode(char *buf, int blen, const char *src, int slen);
 int uh_urlencode(char *buf, int blen, const char *src, int slen);
 int uh_b64decode(char *buf, int blen, const void *src, int slen);

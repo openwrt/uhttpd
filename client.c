@@ -18,7 +18,6 @@
  */
 
 #include <libubox/blobmsg.h>
-#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 
@@ -361,41 +360,6 @@ static void client_header_complete(struct client *cl)
 	uh_handle_request(cl);
 }
 
-enum {
-	ALPHA  = (1 << 0),
-	CHAR   = (1 << 1),
-	CTL    = (1 << 2),
-	DIGIT  = (1 << 3),
-	HEXDIG = (1 << 4),
-	VCHAR  = (1 << 5),
-	WSP    = (1 << 6),
-	DELIM  = (1 << 7),
-	VDELIM = DELIM | VCHAR,
-	VALPHA = ALPHA | VCHAR,
-	XALPHA = ALPHA | HEXDIG | VCHAR,
-	XDIGIT = DIGIT | HEXDIG | VCHAR,
-};
-
-static uint8_t chartypes[256] = {
-/* 00..07 */ CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,
-/* 08..0f */ CTL,    WSP,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,
-/* 10..17 */ CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,
-/* 18..1f */ CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,    CTL,
-/* 20..27 */ WSP,    VCHAR,  VDELIM, VCHAR,  VCHAR,  VCHAR,  VCHAR,  VCHAR,
-/* 28..2f */ VDELIM, VDELIM, VCHAR,  VCHAR,  VDELIM, VCHAR,  VCHAR,  VDELIM,
-/* 30..37 */ XDIGIT, XDIGIT, XDIGIT, XDIGIT, XDIGIT, XDIGIT, XDIGIT, XDIGIT,
-/* 38..3f */ XDIGIT, XDIGIT, VDELIM, VDELIM, VDELIM, VDELIM, VDELIM, VDELIM,
-/* 40..47 */ VDELIM, XALPHA, XALPHA, XALPHA, XALPHA, XALPHA, XALPHA, VALPHA,
-/* 48..4f */ VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA,
-/* 50..57 */ VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA,
-/* 58..5f */ VALPHA, VALPHA, VALPHA, VDELIM, VDELIM, VDELIM, VCHAR,  VCHAR,
-/* 60..67 */ VCHAR,  XALPHA, XALPHA, XALPHA, XALPHA, XALPHA, XALPHA, VALPHA,
-/* 68..6f */ VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA,
-/* 70..77 */ VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA, VALPHA,
-/* 78..7f */ VALPHA, VALPHA, VALPHA, VDELIM, VCHAR,  VDELIM, VCHAR,  CTL,
-/* 80..ff: no flags */
-};
-
 static long
 parse_chunksize(char *buf, char *end)
 {
@@ -405,9 +369,9 @@ parse_chunksize(char *buf, char *end)
 	for (p = buf; p < end; p++) {
 		int n;
 
-		if (chartypes[(uint8_t)*p] & DIGIT)
+		if (chartypes[(uint8_t)*p] & CT_DIGIT)
 			n = *p - '0';
-		else if (chartypes[(uint8_t)*p] & HEXDIG)
+		else if (chartypes[(uint8_t)*p] & CT_HEXDIG)
 			n = 10 + (*p | 32) - 'a';
 		else
 			break;
@@ -429,11 +393,11 @@ parse_chunksize(char *buf, char *end)
 	/* skip optional chunk extensions (;name=value) */
 	while (p < end && *p == ';') {
 		p++;
-		while (p < end && (chartypes[(uint8_t)*p] & (ALPHA | DIGIT)))
+		while (p < end && (chartypes[(uint8_t)*p] & (CT_ALPHA | CT_DIGIT)))
 			p++;
 		if (p < end && *p == '=') {
 			p++;
-			while (p < end && (chartypes[(uint8_t)*p] & (ALPHA | DIGIT)))
+			while (p < end && (chartypes[(uint8_t)*p] & (CT_ALPHA | CT_DIGIT)))
 				p++;
 		}
 	}
@@ -481,19 +445,18 @@ static void client_parse_header(struct client *cl, char *data, size_t line_len)
 	 * the colon must immediately follow the name. Reject malformed
 	 * header lines to prevent request smuggling via reverse proxies
 	 * that may interpret them differently. */
-	if (!*data || isspace((unsigned char)*data)) {
+	if (!*data || uh_is_wsp(*data)) {
 		uh_header_error(cl, 400, "Bad Request");
 		return;
 	}
 
 	for (name = data; *name; name++) {
-		if (isspace((unsigned char)*name) ||
-		    (chartypes[(uint8_t)*name] & (VCHAR | DELIM)) != VCHAR) {
+		if (uh_is_wsp(*name) || !uh_is_tchar(*name)) {
 			uh_header_error(cl, 400, "Bad Request");
 			return;
 		}
-		if (isupper((unsigned char)*name))
-			*name = tolower((unsigned char)*name);
+		if (*name >= 'A' && *name <= 'Z')
+			*name += 'a' - 'A';
 	}
 
 	if (!strcmp(data, "expect")) {

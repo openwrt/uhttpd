@@ -17,8 +17,27 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <ctype.h>
 #include "uhttpd.h"
+
+uint8_t chartypes[256] = {
+/* 00..07 */ 0,    0,    0,    0,    0,    0,    0,    0,
+/* 08..0f */ 0,    CT_WSP, 0,    0,    0,    0,    0,    0,
+/* 10..17 */ 0,    0,    0,    0,    0,    0,    0,    0,
+/* 18..1f */ 0,    0,    0,    0,    0,    0,    0,    0,
+/* 20..27 */ CT_WSP, CT_VCHAR, CT_VDELIM, CT_VCHAR, CT_VCHAR, CT_VCHAR, CT_VCHAR, CT_VCHAR,
+/* 28..2f */ CT_VDELIM, CT_VDELIM, CT_VCHAR, CT_VCHAR, CT_VDELIM, CT_VCHAR, CT_VCHAR, CT_VDELIM,
+/* 30..37 */ CT_XDIGIT, CT_XDIGIT, CT_XDIGIT, CT_XDIGIT, CT_XDIGIT, CT_XDIGIT, CT_XDIGIT, CT_XDIGIT,
+/* 38..3f */ CT_XDIGIT, CT_XDIGIT, CT_VDELIM, CT_VDELIM, CT_VDELIM, CT_VDELIM, CT_VDELIM, CT_VDELIM,
+/* 40..47 */ CT_VDELIM, CT_XALPHA, CT_XALPHA, CT_XALPHA, CT_XALPHA, CT_XALPHA, CT_XALPHA, CT_VALPHA,
+/* 48..4f */ CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA,
+/* 50..57 */ CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA,
+/* 58..5f */ CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VDELIM, CT_VDELIM, CT_VDELIM, CT_VCHAR, CT_VCHAR,
+/* 60..67 */ CT_VCHAR, CT_XALPHA, CT_XALPHA, CT_XALPHA, CT_XALPHA, CT_XALPHA, CT_XALPHA, CT_VALPHA,
+/* 68..6f */ CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA,
+/* 70..77 */ CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VALPHA,
+/* 78..7f */ CT_VALPHA, CT_VALPHA, CT_VALPHA, CT_VDELIM, CT_VCHAR, CT_VDELIM, CT_VCHAR, 0,
+/* 80..ff: no flags */
+};
 
 bool uh_use_chunked(struct client *cl)
 {
@@ -124,8 +143,8 @@ int uh_urldecode(char *buf, int blen, const char *src, int slen)
 		}
 
 		if (i + 2 >= slen ||
-		    !isxdigit((unsigned char)src[i + 1]) ||
-		    !isxdigit((unsigned char)src[i + 2]))
+		    !(chartypes[(uint8_t)src[i + 1]] & CT_HEXDIG) ||
+		    !(chartypes[(uint8_t)src[i + 2]] & CT_HEXDIG))
 			return -2;
 
 		buf[len++] = (char)(16 * hex(src[i+1]) + hex(src[i+2]));
@@ -147,7 +166,7 @@ int uh_urlencode(char *buf, int blen, const char *src, int slen)
 
 	for (i = 0; (i < slen) && (len < blen); i++)
 	{
-		if( isalnum((unsigned char)src[i]) || (src[i] == '-') || (src[i] == '_') ||
+		if( (chartypes[(uint8_t)src[i]] & (CT_ALPHA | CT_DIGIT)) || (src[i] == '-') || (src[i] == '_') ||
 		    (src[i] == '.') || (src[i] == '~') )
 		{
 			buf[len++] = src[i];
@@ -237,7 +256,7 @@ char *uh_split_header(char *str)
 	*val = 0;
 	val++;
 
-	while (isspace((unsigned char)*val))
+	while (chartypes[(uint8_t)*val] & CT_WSP)
 		val++;
 
 	return val;
