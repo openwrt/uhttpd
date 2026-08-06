@@ -30,7 +30,9 @@
 
 #include <getopt.h>
 #include <errno.h>
+#include <grp.h>
 #include <netdb.h>
+#include <pwd.h>
 #include <signal.h>
 
 #include <libubox/usock.h>
@@ -135,6 +137,7 @@ static int usage(const char *name)
 		"	-f              Do not fork to background\n"
 		"	-c file         Configuration file, default is '/etc/httpd.conf'\n"
 		"	-p [addr:]port  Bind to specified address and port, multiple allowed\n"
+		"	-Z user         Drop to the given user after binding sockets\n"
 #ifdef HAVE_TLS
 		"	-s [addr:]port  Like -p but provide HTTPS on this port\n"
 		"	-C file         ASN.1 server certificate file\n"
@@ -275,6 +278,7 @@ int main(int argc, char **argv)
 	struct alias *alias;
 	bool nofork = false;
 	char *port;
+	const char *priv_user = NULL;
 	int opt, ch;
 	int cur_fd;
 	int bound = 0;
@@ -295,7 +299,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qQ:Rr:Ss:T:t:U:u:Xx:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qQ:Rr:Ss:T:t:U:u:Xx:y:Z:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -579,6 +583,10 @@ int main(int argc, char **argv)
 			                "ignoring -%c\n", ch);
 			break;
 #endif
+		case 'Z':
+			priv_user = optarg;
+			break;
+
 		default:
 			return usage(argv[0]);
 		}
@@ -613,6 +621,23 @@ int main(int argc, char **argv)
 		    return 1;
 	}
 #endif
+
+	if (priv_user) {
+		struct passwd *pw = getpwnam(priv_user);
+
+		if (!pw) {
+			fprintf(stderr, "Error: Invalid user %s\n", priv_user);
+			return 1;
+		}
+
+		if (initgroups(priv_user, pw->pw_gid) ||
+		    setgid(pw->pw_gid) ||
+		    setresuid(pw->pw_uid, pw->pw_uid, pw->pw_uid)) {
+			fprintf(stderr, "Error: Failed to drop privileges to %s: %s\n",
+			        priv_user, strerror(errno));
+			return 1;
+		}
+	}
 
 #ifdef HAVE_LUA
 	if (lua_handler || lua_prefix) {
