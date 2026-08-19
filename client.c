@@ -710,6 +710,23 @@ static bool client_data_cb(struct client *cl, char *buf, int len)
 	return false;
 }
 
+static bool client_tunnel_cb(struct client *cl, char *buf, int len)
+{
+	struct dispatch *d = &cl->dispatch;
+	int cur;
+
+	if (!d->data_send || d->data_blocked)
+		return false;
+
+	cur = d->data_send(cl, buf, len);
+	if (cur <= 0)
+		return false;
+
+	ustream_consume(cl->us, cur);
+
+	return true;
+}
+
 static bool client_header_cb(struct client *cl, char *buf, int len)
 {
 	char *newline;
@@ -734,6 +751,7 @@ static read_cb_t read_cbs[] = {
 	[CLIENT_STATE_INIT] = client_init_cb,
 	[CLIENT_STATE_HEADER] = client_header_cb,
 	[CLIENT_STATE_DATA] = client_data_cb,
+	[CLIENT_STATE_TUNNEL] = client_tunnel_cb,
 };
 
 void uh_client_read_cb(struct client *cl)
@@ -754,6 +772,7 @@ void uh_client_read_cb(struct client *cl)
 		if (!read_cbs[cl->state](cl, str, len)) {
 			if (len == us->r.buffer_len &&
 			    cl->state != CLIENT_STATE_DATA &&
+			    cl->state != CLIENT_STATE_TUNNEL &&
 			    cl->state != CLIENT_STATE_DONE)
 				uh_header_error(cl, 413, "Request Entity Too Large");
 			break;
