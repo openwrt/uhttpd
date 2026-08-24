@@ -20,6 +20,7 @@
 #include <libubox/blobmsg.h>
 #include <errno.h>
 #include <limits.h>
+#include <netinet/tcp.h>
 
 #include "uhttpd.h"
 #include "tls.h"
@@ -849,6 +850,7 @@ bool uh_accept_client(int fd, bool tls)
 	static struct client *next_client;
 	struct client *cl;
 	unsigned int sl;
+	int yes = 1;
 	int sfd;
 	static int client_id = 0;
 	struct sockaddr_in6 addr;
@@ -862,6 +864,13 @@ bool uh_accept_client(int fd, bool tls)
 	sfd = accept(fd, (struct sockaddr *) &addr, &sl);
 	if (sfd < 0)
 		return false;
+
+	/* A response is emitted as one write() per header line plus one for the
+	 * body, so with Nagle enabled the small final segment of a response on a
+	 * REUSED keep-alive connection is held back until the peer acknowledges
+	 * the previous one - which its delayed ACK timer puts ~40 ms away. Every
+	 * request after the first on a connection pays that. */
+	setsockopt(sfd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes));
 
 	set_addr(&cl->peer_addr, &addr);
 	sl = sizeof(addr);
