@@ -94,6 +94,7 @@ struct config {
 	int tls_redirect;
 	int tcp_keepalive;
 	int max_script_requests;
+	int max_source_script_requests;
 	int max_connections;
 	int http_keepalive;
 	int script_timeout;
@@ -292,6 +293,7 @@ struct client {
 	struct list_head list;
 	int refcount;
 	int id;
+	bool script;
 
 	struct ustream *us;
 	struct ustream_fd sfd;
@@ -348,6 +350,7 @@ void uh_handle_request(struct client *cl);
 void client_poll_post_data(struct client *cl);
 void uh_client_read_cb(struct client *cl);
 void uh_client_notify_state(struct client *cl);
+int uh_source_script_count(const struct uh_addr *addr);
 
 void uh_auth_add(const char *path, const char *user, const char *pass);
 bool uh_auth_check(struct client *cl, const char *path, const char *auth,

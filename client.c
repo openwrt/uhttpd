@@ -1104,6 +1104,33 @@ bool uh_accept_client(int fd, bool tls)
 	return true;
 }
 
+/*
+ * Number of script slots currently held by clients sharing the given peer
+ * address. A single connection holds at most one slot (cl->script), so this
+ * caps how many concurrent script slots one source can take out of the global
+ * max_script_requests pool - see uh_invoke_handler().
+ */
+int uh_source_script_count(const struct uh_addr *addr)
+{
+	struct client *cl;
+	int n = 0;
+
+	list_for_each_entry(cl, &clients, list) {
+		if (!cl->script)
+			continue;
+		if (cl->peer_addr.family != addr->family)
+			continue;
+		if (cl->peer_addr.family == AF_INET &&
+		    memcmp(&cl->peer_addr.in, &addr->in, sizeof(addr->in)))
+			continue;
+		if (cl->peer_addr.family == AF_INET6 &&
+		    memcmp(&cl->peer_addr.in6, &addr->in6, sizeof(addr->in6)))
+			continue;
+		n++;
+	}
+
+	return n;
+}
 
 void uh_close_fds(void)
 {

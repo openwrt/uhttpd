@@ -767,6 +767,7 @@ static void
 uh_invoke_script(struct client *cl, struct dispatch_handler *d, char *url, struct path_info *pi)
 {
 	n_requests++;
+	cl->script = true;
 	d->handle_request(cl, url, pi);
 }
 
@@ -774,13 +775,29 @@ static void uh_complete_request(struct client *cl)
 {
 	struct deferred_request *dr;
 
+	/* release this client's slot before it is reused below */
+	cl->script = false;
 	n_requests--;
 
-	while (!list_empty(&pending_requests)) {
-		if (n_requests >= conf.max_script_requests)
+	while (n_requests < conf.max_script_requests) {
+		struct deferred_request *cand;
+
+		/* promote the first queued request whose source is below its cap;
+		 * requests of sources at their cap stay queued */
+		dr = NULL;
+		list_for_each_entry(cand, &pending_requests, list) {
+			if (conf.max_source_script_requests > 0 &&
+			    uh_source_script_count(&cand->cl->peer_addr) >=
+			    conf.max_source_script_requests)
+				continue;
+
+			dr = cand;
+			break;
+		}
+
+		if (!dr)
 			return;
 
-		dr = list_first_entry(&pending_requests, struct deferred_request, list);
 		list_del(&dr->list);
 
 		cl = dr->cl;
@@ -868,6 +885,17 @@ uh_invoke_handler(struct client *cl, struct dispatch_handler *d, char *url, stru
 		return d->handle_request(cl, url, pi);
 
 	if (n_requests >= conf.max_script_requests)
+		return uh_defer_script(cl, d, url, pi);
+
+	/*
+	 * Per-source cap: a single peer address may not take more than
+	 * max_source_script_requests of the global script slots, so one host
+	 * cannot monopolise the pool and starve every other client of CGI /
+	 * Lua / ucode requests. Deferred (queued) requests hold no slot and
+	 * are therefore not counted; only running slots (cl->script) are.
+	 */
+	if (conf.max_source_script_requests > 0 &&
+	    uh_source_script_count(&cl->peer_addr) >= conf.max_source_script_requests)
 		return uh_defer_script(cl, d, url, pi);
 
 	cl->dispatch.req_free = uh_complete_request;

@@ -39,6 +39,8 @@
 #include "uhttpd.h"
 #include "tls.h"
 
+#define MAX(a, b)	(((a) > (b)) ? (a) : (b))
+
 char uh_buf[4096];
 
 static int run_server(void)
@@ -151,6 +153,8 @@ static int usage(const char *name)
 		"	-D              Do not allow directory listings, send 403 instead\n"
 		"	-R              Enable RFC1918 filter\n"
 		"	-n count        Maximum allowed number of concurrent script requests\n"
+		"	-W count        Maximum concurrent script requests per source address\n"
+		"	                (default: half of -n rounded up; 0 disables the cap)\n"
 		"	-N count        Maximum allowed number of concurrent connections\n"
 #ifdef HAVE_LUA
 		"	-l string       URL prefix for Lua handler\n"
@@ -188,6 +192,7 @@ static void init_defaults_pre(void)
 	conf.network_timeout = 30;
 	conf.http_keepalive = 20;
 	conf.max_script_requests = 3;
+	conf.max_source_script_requests = -1; /* -1 = unset, compute in init_defaults_post */
 	conf.max_connections = 100;
 	conf.realm = "Protected Area";
 	conf.cgi_prefix = "/cgi-bin";
@@ -206,6 +211,20 @@ static void init_defaults_post(void)
 	uh_index_add("index.htm");
 	uh_index_add("default.html");
 	uh_index_add("default.htm");
+
+	/*
+	 * Per-source script slot cap: unless overridden with -W, a single peer
+	 * address may take at most half of the global script pool, rounded up,
+	 * so one host cannot monopolise every slot and starve all other clients
+	 * of CGI/Lua/ucode requests. Rounding up keeps some concurrency for a
+	 * single source with the default pool of 3 (2 slots instead of 1, e.g.
+	 * for a browser or a reverse proxy), while a pool of 2 or more always
+	 * keeps at least one slot for other sources. This is defence-in-depth
+	 * on top of the slot release on an abandoned request body (client.c).
+	 */
+	if (conf.max_source_script_requests < 0)
+		conf.max_source_script_requests =
+			MAX(1, (conf.max_script_requests + 1) / 2);
 
 	if (conf.cgi_prefix) {
 		char *str = malloc(strlen(conf.docroot) + strlen(conf.cgi_prefix) + 1);
@@ -295,7 +314,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qQ:Rr:Ss:T:t:U:u:Xx:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qQ:Rr:Ss:T:t:U:u:Xx:W:y:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -391,6 +410,10 @@ int main(int argc, char **argv)
 
 		case 'n':
 			conf.max_script_requests = atoi(optarg);
+			break;
+
+		case 'W':
+			conf.max_source_script_requests = atoi(optarg);
 			break;
 
 		case 'N':
