@@ -888,12 +888,113 @@ static void client_close(struct client *cl)
 	uh_unblock_listeners();
 }
 
+/*
+ * Returns true when the full request body has been received, i.e. it is
+ * safe to keep the connection alive after the peer has closed its write
+ * direction. This distinguishes a legitimate half-close (the client sent
+ * the entire body and now waits for the response) from a connection that
+ * was abandoned while the body was still outstanding (the remaining bytes
+ * will never arrive).
+ *
+ * request.content_length holds the number of body bytes not yet handed to
+ * the script (it is decremented as each byte is consumed, and set to each
+ * chunk's size for chunked bodies); ustream r.data_bytes holds the total
+ * body bytes buffered but not yet consumed. The body is complete when
+ * everything still expected has already been received - either consumed or
+ * still sitting in the read buffer.
+ *
+ * A chunked body is only parsed as fast as the script consumes it, so a
+ * complete body may still sit unparsed in the read buffer, e.g. while the
+ * request is deferred or the script stopped reading. Walk the buffered
+ * bytes from the current parser position, without consuming anything, and
+ * report completeness once the terminal chunk and the end of the trailer
+ * section are buffered. The read stream is a single, compacted buffer and
+ * the peer's EOF is only seen after everything it sent has been read into
+ * it, so the head fragment covers all of the remaining body.
+ */
+static bool uh_chunked_body_complete(struct client *cl)
+{
+	struct http_request *r = &cl->request;
+	enum chunked_state state = r->transfer_chunked;
+	long remaining = r->content_length;
+	char *buf, *sep;
+	int len;
+
+	buf = ustream_get_read_buf(cl->us, &len);
+	if (!buf)
+		len = 0;
+
+	while (1) {
+		if (state == CHUNKED_TRAILER) {
+			sep = find_crlf(buf, len);
+			if (!sep)
+				return false;
+
+			if (sep == buf)
+				return true; /* blank line ends the trailer section */
+
+			len -= sep + 2 - buf;
+			buf = sep + 2;
+			continue;
+		}
+
+		/* outstanding data of the current chunk */
+		if (remaining > len)
+			return false;
+
+		buf += remaining;
+		len -= remaining;
+
+		/* CRLF terminating the data of the previous chunk; malformed
+		 * framing fails the request anyway, so do not keep it alive */
+		if (state == CHUNKED_NEXT) {
+			if (len < 2 || buf[0] != '\r' || buf[1] != '\n')
+				return false;
+
+			buf += 2;
+			len -= 2;
+		}
+
+		sep = find_crlf(buf, len);
+		if (!sep)
+			return false;
+
+		remaining = parse_chunksize(buf, sep);
+		if (remaining < 0)
+			return false;
+
+		len -= sep + 2 - buf;
+		buf = sep + 2;
+		state = remaining ? CHUNKED_NEXT : CHUNKED_TRAILER;
+	}
+}
+
+static bool uh_client_body_complete(struct client *cl)
+{
+	struct http_request *r = &cl->request;
+	struct ustream *s = cl->us;
+
+	if (r->transfer_chunked)
+		return uh_chunked_body_complete(cl);
+
+	return r->content_length <= (int)s->r.data_bytes;
+}
+
 void uh_client_notify_state(struct client *cl)
 {
 	struct ustream *s = cl->us;
 
 	if (!s->write_error && cl->state != CLIENT_STATE_CLEANUP) {
-		if (cl->state == CLIENT_STATE_DATA)
+		/*
+		 * A peer that closed while the request body was still
+		 * outstanding (e.g. headers announcing a Content-Length with
+		 * the body never sent) will never deliver the remaining bytes.
+		 * The script slot and the connection would otherwise be pinned
+		 * until script_timeout expires, so release them here. Only keep
+		 * the connection when the full body has actually been received.
+		 */
+		if (cl->state == CLIENT_STATE_DATA &&
+		    uh_client_body_complete(cl))
 			return;
 
 		if (!s->eof || s->w.data_bytes)
@@ -1002,6 +1103,7 @@ bool uh_accept_client(int fd, bool tls)
 
 	return true;
 }
+
 
 void uh_close_fds(void)
 {
