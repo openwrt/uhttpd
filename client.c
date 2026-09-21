@@ -371,82 +371,7 @@ static void client_header_complete(struct client *cl)
 	if (r->expect_cont)
 		ustream_printf(cl->us, "HTTP/1.1 100 Continue\r\n\r\n");
 
-	switch(r->ua) {
-	case UH_UA_MSIE_OLD:
-		if (r->method != UH_HTTP_MSG_POST)
-			break;
-
-		/* fall through */
-	case UH_UA_SAFARI:
-		r->connection_close = true;
-		break;
-	default:
-		break;
-	}
-
 	uh_handle_request(cl);
-}
-
-/* Product versions and iOS versions are separate compatibility signals.
- * Missing, duplicate, malformed or overlong versions fail closed.
- */
-static bool ua_version_at_least(const char *ua, const char *token, char separator,
-				const unsigned int minimum[4], unsigned int required)
-{
-	const char *v = strstr(ua, token);
-	unsigned int version[4] = { 0 };
-	unsigned int count = 0, digits, i;
-
-	if (!v || (v != ua && v[-1] != ' ') ||
-	    strstr(v + strlen(token), token))
-		return false;
-
-	v += strlen(token);
-	do {
-		if (count == 4 || *v < '0' || *v > '9')
-			return false;
-		digits = 0;
-		do {
-			if (++digits > 6)
-				return false;
-			version[count] = version[count] * 10 + (*v++ - '0');
-		} while (*v >= '0' && *v <= '9');
-		count++;
-		if (*v != separator)
-			break;
-		v++;
-	} while (true);
-
-	if (count < required || (*v && *v != ' ' && *v != '\t'))
-		return false;
-
-	for (i = 0; i < 4; i++) {
-		if (version[i] != minimum[i])
-			return version[i] > minimum[i];
-	}
-	return true;
-}
-
-/* Tested: Safari 27.0 and CriOS 153.0.8010.24 on iPhone/iOS 27.0.
- * Newer versions are a compatibility policy, not measured coverage.
- * A Chrome application version alone does not establish WebKit compatibility.
- */
-static bool webkit_keepalive_supported(const char *ua)
-{
-	static const unsigned int safari_min[4] = { 27, 0, 0, 0 };
-	static const unsigned int crios_min[4] = { 153, 0, 8010, 24 };
-	static const unsigned int ios_min[4] = { 27, 0, 0, 0 };
-
-	if (!strstr(ua, "AppleWebKit/") || strstr(ua, "FxiOS/") ||
-	    strstr(ua, "EdgiOS/") || strstr(ua, "OPiOS/"))
-		return false;
-
-	if (strstr(ua, "CriOS/"))
-		return strstr(ua, "(iPhone;") &&
-			ua_version_at_least(ua, "CriOS/", '.', crios_min, 4) &&
-			ua_version_at_least(ua, "CPU iPhone OS ", '_', ios_min, 2);
-
-	return ua_version_at_least(ua, "Version/", '.', safari_min, 2);
 }
 
 static long
@@ -593,35 +518,6 @@ static void client_parse_header(struct client *cl, char *data, size_t line_len)
 	} else if (!strcmp(data, "connection")) {
 		if (!strcasecmp(val, "close"))
 			r->connection_close = true;
-	} else if (!strcmp(data, "user-agent")) {
-		char *str;
-
-		if (strstr(val, "Opera"))
-			r->ua = UH_UA_OPERA;
-		else if ((str = strstr(val, "MSIE ")) != NULL) {
-			r->ua = UH_UA_MSIE_NEW;
-			if (str[5] && str[6] == '.') {
-				switch (str[5]) {
-				case '6':
-					if (strstr(str, "SV1"))
-						break;
-					/* fall through */
-				case '5':
-				case '4':
-					r->ua = UH_UA_MSIE_OLD;
-					break;
-				}
-			}
-		}
-		else if (strstr(val, "Chrome/"))
-			r->ua = UH_UA_CHROME;
-		else if (strstr(val, "Safari/") && strstr(val, "Mac OS X"))
-			r->ua = webkit_keepalive_supported(val) ?
-				UH_UA_WEBKIT_KEEPALIVE : UH_UA_SAFARI;
-		else if (strstr(val, "Gecko/"))
-			r->ua = UH_UA_GECKO;
-		else if (strstr(val, "Konqueror"))
-			r->ua = UH_UA_KONQUEROR;
 	}
 
 
