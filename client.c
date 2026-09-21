@@ -387,42 +387,66 @@ static void client_header_complete(struct client *cl)
 	uh_handle_request(cl);
 }
 
-/* Only Safari's product Version token establishes the tested minimum.
- * Missing, malformed and known alternative-browser UAs keep the workaround.
- * Version 27.0 was tested on iOS; newer versions are a compatibility policy.
+/* Product versions and iOS versions are separate compatibility signals.
+ * Missing, duplicate, malformed or overlong versions fail closed.
  */
-static bool safari_keepalive_supported(const char *ua)
+static bool ua_version_at_least(const char *ua, const char *token, char separator,
+				const unsigned int minimum[4], unsigned int required)
 {
-	const char *v = strstr(ua, "Version/");
-	unsigned int major = 0;
+	const char *v = strstr(ua, token);
+	unsigned int version[4] = { 0 };
+	unsigned int count = 0, digits, i;
 
-	if (!strstr(ua, "AppleWebKit/") || !v ||
-	    (v != ua && v[-1] != ' ') || strstr(v + 8, "Version/") ||
-	    strstr(ua, "CriOS/") || strstr(ua, "FxiOS/") ||
+	if (!v || (v != ua && v[-1] != ' ') ||
+	    strstr(v + strlen(token), token))
+		return false;
+
+	v += strlen(token);
+	do {
+		if (count == 4 || *v < '0' || *v > '9')
+			return false;
+		digits = 0;
+		do {
+			if (++digits > 6)
+				return false;
+			version[count] = version[count] * 10 + (*v++ - '0');
+		} while (*v >= '0' && *v <= '9');
+		count++;
+		if (*v != separator)
+			break;
+		v++;
+	} while (true);
+
+	if (count < required || (*v && *v != ' ' && *v != '\t'))
+		return false;
+
+	for (i = 0; i < 4; i++) {
+		if (version[i] != minimum[i])
+			return version[i] > minimum[i];
+	}
+	return true;
+}
+
+/* Tested: Safari 27.0 and CriOS 153.0.8010.24 on iPhone/iOS 27.0.
+ * Newer versions are a compatibility policy, not measured coverage.
+ * A Chrome application version alone does not establish WebKit compatibility.
+ */
+static bool webkit_keepalive_supported(const char *ua)
+{
+	static const unsigned int safari_min[4] = { 27, 0, 0, 0 };
+	static const unsigned int crios_min[4] = { 153, 0, 8010, 24 };
+	static const unsigned int ios_min[4] = { 27, 0, 0, 0 };
+
+	if (!strstr(ua, "AppleWebKit/") || strstr(ua, "FxiOS/") ||
 	    strstr(ua, "EdgiOS/") || strstr(ua, "OPiOS/"))
 		return false;
 
-	v += 8;
-	if (*v < '0' || *v > '9')
-		return false;
-	do {
-		major = major * 10 + (*v++ - '0');
-		if (major > 999)
-			return false;
-	} while (*v >= '0' && *v <= '9');
+	if (strstr(ua, "CriOS/"))
+		return strstr(ua, "(iPhone;") &&
+			ua_version_at_least(ua, "CriOS/", '.', crios_min, 4) &&
+			ua_version_at_least(ua, "CPU iPhone OS ", '_', ios_min, 2);
 
-	/* Require a minor version; validate every dotted numeric component. */
-	if (*v != '.')
-		return false;
-	do {
-		v++;
-		if (*v < '0' || *v > '9')
-			return false;
-		while (*v >= '0' && *v <= '9')
-			v++;
-	} while (*v == '.');
-
-	return major >= 27 && (*v == '\0' || *v == ' ' || *v == '\t');
+	return ua_version_at_least(ua, "Version/", '.', safari_min, 2);
 }
 
 static long
@@ -592,8 +616,8 @@ static void client_parse_header(struct client *cl, char *data, size_t line_len)
 		else if (strstr(val, "Chrome/"))
 			r->ua = UH_UA_CHROME;
 		else if (strstr(val, "Safari/") && strstr(val, "Mac OS X"))
-			r->ua = safari_keepalive_supported(val) ?
-				UH_UA_SAFARI_27_PLUS : UH_UA_SAFARI;
+			r->ua = webkit_keepalive_supported(val) ?
+				UH_UA_WEBKIT_KEEPALIVE : UH_UA_SAFARI;
 		else if (strstr(val, "Gecko/"))
 			r->ua = UH_UA_GECKO;
 		else if (strstr(val, "Konqueror"))

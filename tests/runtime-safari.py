@@ -48,19 +48,22 @@ with tempfile.TemporaryDirectory() as directory:
                 assert body == b'keepalive-check\n'
             return sock, response
 
-        conn = http.client.HTTPConnection('127.0.0.1', port, timeout=4)
-        sock, first = request(conn, MODERN, False)
-        sock2, _ = request(conn, MODERN, False)
-        assert sock is sock2
-        etag = first.getheader('ETag')
-        assert etag
-        sock3, _ = request(conn, MODERN, False, {'If-None-Match': etag}, status=304)
-        assert sock3 is sock
-        request(conn, MODERN, True, {'Connection': 'close'})
-        conn.close()
+        for supported in [MODERN, PREFIX+'CriOS/153.0.8010.24'+SUFFIX]:
+            conn = http.client.HTTPConnection('127.0.0.1', port, timeout=4)
+            sock, first = request(conn, supported, False)
+            sock2, _ = request(conn, supported, False)
+            assert sock is sock2
+            etag = first.getheader('ETag')
+            assert etag
+            sock3, _ = request(conn, supported, False, {'If-None-Match': etag}, status=304)
+            assert sock3 is sock
+            request(conn, supported, True, {'Connection': 'close'})
+            conn.close()
         for ua, closes in [(PREFIX+'Version/26.9'+SUFFIX, True),
                            (PREFIX+'Version/28.0'+SUFFIX, False),
-                           (PREFIX+'CriOS/153.0.8010.24'+SUFFIX, True),
+                           (PREFIX+'CriOS/153.0.8010.24'+SUFFIX, False),
+                           (PREFIX+'CriOS/153.0.8010.23'+SUFFIX, True),
+                           (PREFIX.replace('27_0_0','26_9')+'CriOS/154.0.0.0'+SUFFIX, True),
                            (PREFIX+'Chrome/153.0'+SUFFIX, False)]:
             conn = http.client.HTTPConnection('127.0.0.1', port, timeout=4)
             request(conn, ua, closes)
