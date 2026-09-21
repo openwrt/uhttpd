@@ -387,6 +387,44 @@ static void client_header_complete(struct client *cl)
 	uh_handle_request(cl);
 }
 
+/* Only Safari's product Version token establishes the tested minimum.
+ * Missing, malformed and known alternative-browser UAs keep the workaround.
+ * Version 27.0 was tested on iOS; newer versions are a compatibility policy.
+ */
+static bool safari_keepalive_supported(const char *ua)
+{
+	const char *v = strstr(ua, "Version/");
+	unsigned int major = 0;
+
+	if (!strstr(ua, "AppleWebKit/") || !v ||
+	    (v != ua && v[-1] != ' ') || strstr(v + 8, "Version/") ||
+	    strstr(ua, "CriOS/") || strstr(ua, "FxiOS/") ||
+	    strstr(ua, "EdgiOS/") || strstr(ua, "OPiOS/"))
+		return false;
+
+	v += 8;
+	if (*v < '0' || *v > '9')
+		return false;
+	do {
+		major = major * 10 + (*v++ - '0');
+		if (major > 999)
+			return false;
+	} while (*v >= '0' && *v <= '9');
+
+	/* Require a minor version; validate every dotted numeric component. */
+	if (*v != '.')
+		return false;
+	do {
+		v++;
+		if (*v < '0' || *v > '9')
+			return false;
+		while (*v >= '0' && *v <= '9')
+			v++;
+	} while (*v == '.');
+
+	return major >= 27 && (*v == '\0' || *v == ' ' || *v == '\t');
+}
+
 static long
 parse_chunksize(char *buf, char *end)
 {
@@ -554,7 +592,8 @@ static void client_parse_header(struct client *cl, char *data, size_t line_len)
 		else if (strstr(val, "Chrome/"))
 			r->ua = UH_UA_CHROME;
 		else if (strstr(val, "Safari/") && strstr(val, "Mac OS X"))
-			r->ua = UH_UA_SAFARI;
+			r->ua = safari_keepalive_supported(val) ?
+				UH_UA_SAFARI_27_PLUS : UH_UA_SAFARI;
 		else if (strstr(val, "Gecko/"))
 			r->ua = UH_UA_GECKO;
 		else if (strstr(val, "Konqueror"))

@@ -148,6 +148,8 @@ enum http_user_agent {
 	UH_UA_OPERA,
 	UH_UA_MSIE_OLD,
 	UH_UA_MSIE_NEW,
+	/* Keep existing enum values stable; no forced-close workaround. */
+	UH_UA_SAFARI_27_PLUS,
 };
 
 enum chunked_state {
