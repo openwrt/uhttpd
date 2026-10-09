@@ -655,12 +655,39 @@ static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *o
 		blobmsg_close_table(data->buf, o);
 }
 
-static void uh_ubus_send_list(struct client *cl, struct blob_attr *params)
+static bool uh_ubus_valid_list_params(struct blob_attr *params)
+{
+	struct blob_attr *cur;
+	int rem;
+
+	/* non-array params are treated as "list all", as before */
+	if (!params || blob_id(params) != BLOBMSG_TYPE_ARRAY)
+		return true;
+
+	/* Array entries are object paths and must be strings: since the
+	 * "params" policy is BLOBMSG_TYPE_UNSPEC, untrusted JSON-RPC input
+	 * may contain numbers, booleans or nested arrays/objects here whose
+	 * blob payload is not NUL terminated, so passing blobmsg_data() of
+	 * such an entry to ubus_lookup() as a C string would cause an
+	 * out-of-bounds read.
+	 */
+	blobmsg_for_each_attr(cur, params, rem)
+		if (blob_id(cur) != BLOBMSG_TYPE_STRING ||
+		    !blobmsg_check_attr(cur, false))
+			return false;
+
+	return true;
+}
+
+static bool uh_ubus_send_list(struct client *cl, struct blob_attr *params)
 {
 	struct blob_attr *cur, *dup;
 	struct list_data data = { .buf = &cl->dispatch.ubus.buf, .verbose = false, .add_object = true };
 	void *r;
 	int rem;
+
+	if (!uh_ubus_valid_list_params(params))
+		return false;
 
 	blob_buf_init(data.buf, 0);
 
@@ -691,6 +718,8 @@ static void uh_ubus_send_list(struct client *cl, struct blob_attr *params)
 	uh_ubus_init_json_rpc_response(cl, &buf);
 	blobmsg_add_blob(&buf, blob_data(data.buf->head));
 	uh_ubus_send_response(cl, &buf);
+
+	return true;
 }
 
 static bool parse_json_rpc(struct rpc_data *d, struct blob_attr *data)
@@ -809,7 +838,10 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 		goto out;
 	}
 	else if (!strcmp(data.method, "list")) {
-		uh_ubus_send_list(cl, data.params);
+		if (!uh_ubus_send_list(cl, data.params)) {
+			err = ERROR_PARAMS;
+			goto error;
+		}
 		goto out;
 	}
 	else {
