@@ -329,6 +329,7 @@ static bool tls_redirect_check(struct client *cl)
 	return false;
 }
 
+#ifdef HAVE_TLS
 static bool sni_redirect_check(struct client *cl)
 {
 	struct sni_redirect *r;
@@ -351,6 +352,12 @@ static bool sni_redirect_check(struct client *cl)
 
 	return true;
 }
+#else
+static bool sni_redirect_check(struct client *cl)
+{
+	return true;
+}
+#endif
 
 static void client_header_complete(struct client *cl)
 {
