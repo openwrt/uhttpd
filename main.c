@@ -167,6 +167,11 @@ static int usage(const char *name)
 		"	-X		Enable CORS HTTP headers on JSON-RPC api\n"
 		"	-e		Events subscription reconnection time (retry value)\n"
 #endif
+		"	-Y prefix=host[:port][/path]\n"
+		"	                Reverse proxy requests below prefix to the given\n"
+		"	                backend, -Y may be repeated. Without /path the URL\n"
+		"	                is passed on unchanged, otherwise prefix is replaced\n"
+		"	                by it. Protocol upgrades (WebSocket) are tunnelled\n"
 		"	-x string       URL prefix for CGI handler, default is '/cgi-bin'\n"
 		"	-y alias[=path]	URL alias handle\n"
 		"	-i .ext=path    Use interpreter at path for files with the given extension\n"
@@ -198,6 +203,7 @@ static void init_defaults_pre(void)
 	INIT_LIST_HEAD(&conf.ucode_prefix);
 #endif
 	INIT_LIST_HEAD(&conf.sni_redirect);
+	INIT_LIST_HEAD(&conf.proxy_prefix);
 }
 
 static void init_defaults_post(void)
@@ -295,7 +301,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qQ:Rr:Ss:T:t:U:u:Xx:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qQ:Rr:Ss:T:t:U:u:Xx:Y:y:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -400,6 +406,14 @@ int main(int argc, char **argv)
 		case 'x':
 			fixup_prefix(optarg);
 			conf.cgi_prefix = optarg;
+			break;
+
+		case 'Y':
+			if (uh_proxy_add(optarg)) {
+				fprintf(stderr, "Error: Invalid proxy target: %s\n",
+						optarg);
+				exit(1);
+			}
 			break;
 
 		case 'y':
@@ -595,6 +609,7 @@ int main(int argc, char **argv)
 	}
 
 	init_defaults_post();
+	uh_proxy_init();
 
 	if (!bound) {
 		fprintf(stderr, "Error: No sockets bound, unable to continue\n");

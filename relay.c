@@ -20,6 +20,16 @@
 #include <signal.h>
 #include "uhttpd.h"
 
+static bool relay_done(struct relay *r)
+{
+	struct ustream *s = &r->sfd.stream;
+
+	if (r->no_process)
+		return s->eof || s->write_error;
+
+	return r->process_done;
+}
+
 void uh_relay_free(struct relay *r)
 {
 	if (!r->cl)
@@ -29,7 +39,8 @@ void uh_relay_free(struct relay *r)
 		kill(r->proc.pid, SIGKILL);
 
 	uloop_timeout_cancel(&r->timeout);
-	uloop_process_delete(&r->proc);
+	if (!r->no_process)
+		uloop_process_delete(&r->proc);
 	ustream_free(&r->sfd.stream);
 	close(r->sfd.fd.fd);
 
@@ -90,6 +101,21 @@ static void relay_process_headers(struct relay *r)
 			newline--;
 
 		*newline = 0;
+		if (r->header_first) {
+			bool ok;
+
+			ok = r->header_first(r, buf);
+			r->header_first = NULL;
+			ustream_consume(s, line_len);
+
+			if (!ok) {
+				relay_error(r);
+				return;
+			}
+
+			continue;
+		}
+
 		if (newline == buf) {
 			r->header_cb = NULL;
 			if (r->header_end)
@@ -117,7 +143,7 @@ static void relay_read_cb(struct ustream *s, int bytes)
 	char *buf;
 	int len;
 
-	if (r->process_done)
+	if (relay_done(r))
 		uloop_timeout_set(&r->timeout, 1);
 
 	if (!r->error)
@@ -155,7 +181,7 @@ static void relay_close_if_done(struct uloop_timeout *timeout)
 
 	while (ustream_poll(&r->sfd.stream));
 
-	if (!(r->process_done || s->eof) || (ustream_pending_data(s, false) && !r->header_cb))
+	if (!(relay_done(r) || s->eof) || (ustream_pending_data(s, false) && !r->header_cb))
 		return;
 
 	uh_relay_close(r, r->ret);
@@ -165,7 +191,7 @@ static void relay_state_cb(struct ustream *s)
 {
 	struct relay *r = container_of(s, struct relay, sfd.stream);
 
-	if (r->process_done)
+	if (relay_done(r))
 		uloop_timeout_set(&r->timeout, 1);
 }
 
@@ -200,6 +226,20 @@ void uh_relay_open(struct client *cl, struct relay *r, int fd, int pid)
 	r->proc.pid = pid;
 	r->proc.cb = relay_proc_cb;
 	uloop_process_add(&r->proc);
+
+	r->timeout.cb = relay_close_if_done;
+}
+
+void uh_relay_open_fd(struct client *cl, struct relay *r, int fd)
+{
+	struct ustream *us = &r->sfd.stream;
+
+	r->cl = cl;
+	r->no_process = true;
+	us->notify_read = relay_read_cb;
+	us->notify_state = relay_state_cb;
+	us->string_data = true;
+	ustream_fd_init(&r->sfd, fd);
 
 	r->timeout.cb = relay_close_if_done;
 }
