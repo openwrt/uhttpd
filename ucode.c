@@ -305,6 +305,7 @@ uh_ucode_state_init(struct ucode_prefix *ucode)
 		exit(1);
 
 	case ERROR_RUNTIME:
+	default:
 		fprintf(stderr, "Error: Runtime error while executing ucode handler\n");
 		exit(2);
 	}
