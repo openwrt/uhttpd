@@ -293,9 +293,6 @@ uh_ucode_state_init(struct ucode_prefix *ucode)
 	ucv_put(v);
 
 	switch (status) {
-	case STATUS_OK:
-		break;
-
 	case STATUS_EXIT:
 		fprintf(stderr, "Error: The ucode handler invoked exit(%d)\n", exitcode);
 		exit(exitcode ? exitcode : 1);
@@ -307,6 +304,10 @@ uh_ucode_state_init(struct ucode_prefix *ucode)
 	case ERROR_RUNTIME:
 		fprintf(stderr, "Error: Runtime error while executing ucode handler\n");
 		exit(2);
+
+	case STATUS_OK:
+	default:
+		break;
 	}
 
 	v = ucv_object_get(uc_vm_scope_get(vm), UH_UCODE_CB, NULL);
