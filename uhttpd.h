@@ -76,6 +76,16 @@ struct ucode_prefix {
 };
 #endif
 
+struct proxy_prefix {
+	struct list_head list;
+	const char *prefix;
+	const char *host;
+	const char *port;
+	/* replacement for the matched prefix, NULL to pass the URL through */
+	const char *path;
+	size_t prefix_len;
+};
+
 struct config {
 	const char *docroot;
 	const char *realm;
@@ -107,6 +117,7 @@ struct config {
 	struct list_head ucode_prefix;
 #endif
 	struct list_head sni_redirect;
+	struct list_head proxy_prefix;
 };
 
 struct sni_redirect {
@@ -176,6 +187,9 @@ enum client_state {
 	CLIENT_STATE_INIT,
 	CLIENT_STATE_HEADER,
 	CLIENT_STATE_DATA,
+	/* raw bidirectional pipe, entered after a successful protocol upgrade;
+	 * everything the client sends is handed to dispatch.data_send as-is */
+	CLIENT_STATE_TUNNEL,
 	CLIENT_STATE_DONE,
 	CLIENT_STATE_CLOSE,
 	CLIENT_STATE_CLEANUP,
@@ -212,10 +226,17 @@ struct relay {
 	bool process_done;
 	bool error;
 	bool skip_data;
+	/* opened with uh_relay_open_fd(): there is no child process, the
+	 * lifetime of the relay is bound to the fd instead */
+	bool no_process;
 
 	int ret;
 	int header_ofs;
 
+	/* if set, the first line is passed here instead of being split into a
+	 * name/value pair; used to parse a HTTP status line. Returning false
+	 * aborts the relay. */
+	bool (*header_first)(struct relay *r, char *line);
 	void (*header_cb)(struct relay *r, const char *name, const char *value);
 	void (*header_end)(struct relay *r);
 	void (*close)(struct relay *r, int ret);
@@ -228,6 +249,24 @@ struct dispatch_proc {
 	struct relay r;
 	int status_code;
 	char status_msg[64];
+};
+
+struct dispatch_proxy {
+	struct relay r;
+	struct uloop_timeout poll;
+	struct blob_buf hdr;
+	int status_code;
+	char status_msg[64];
+
+	/* the client asked for a protocol upgrade */
+	bool upgrade;
+	/* the backend accepted it, the connection is a raw pipe now */
+	bool tunnel;
+	/* the request body has to be re-chunked towards the backend */
+	bool chunked_req;
+	/* the response carries its own body framing (Content-Length,
+	 * Transfer-Encoding, or no body at all) */
+	bool have_framing;
 };
 
 struct dispatch_handler {
@@ -282,6 +321,7 @@ struct dispatch {
 			int fd;
 		} file;
 		struct dispatch_proc proc;
+		struct dispatch_proxy proxy;
 #ifdef HAVE_UBUS
 		struct dispatch_ubus ubus;
 #endif
@@ -360,6 +400,7 @@ void uh_interpreter_add(const char *ext, const char *path);
 void uh_dispatch_add(struct dispatch_handler *d);
 
 void uh_relay_open(struct client *cl, struct relay *r, int fd, int pid);
+void uh_relay_open_fd(struct client *cl, struct relay *r, int fd);
 void uh_relay_close(struct relay *r, int ret);
 void uh_relay_free(struct relay *r);
 void uh_relay_kill(struct client *cl, struct relay *r);
@@ -370,6 +411,9 @@ bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
 
 int uh_plugin_init(const char *name);
 void uh_plugin_post_init(void);
+
+int uh_proxy_add(const char *arg);
+void uh_proxy_init(void);
 
 int uh_handler_add(const char *file);
 int uh_handler_run(struct client *cl, char **url, bool fallback);
