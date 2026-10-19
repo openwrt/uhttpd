@@ -258,6 +258,7 @@ struct dispatch_ubus {
 	bool array;
 	int array_idx;
 	bool legacy; /* Got legacy request => use legacy reply */
+	bool notouch; /* Request carried "X-Ubus-No-Touch: 1": pass notouch=1 to session/access */
 
 	struct ubus_subscriber sub;
 };

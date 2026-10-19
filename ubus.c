@@ -136,6 +136,22 @@ static const char *uh_ubus_get_auth(const struct blob_attr *attr)
 	return UH_UBUS_DEFAULT_SID;
 }
 
+static bool uh_ubus_get_notouch(const struct blob_attr *attr)
+{
+	enum { HDR_NOTOUCH, __HDR_NOTOUCH_MAX };
+	static const struct blobmsg_policy hdr_policy[__HDR_NOTOUCH_MAX] = {
+		[HDR_NOTOUCH] = { "x-ubus-no-touch", BLOBMSG_TYPE_STRING },
+	};
+	struct blob_attr *tb[__HDR_NOTOUCH_MAX];
+
+	blobmsg_parse(hdr_policy, __HDR_NOTOUCH_MAX, tb, blob_data(attr), blob_len(attr));
+
+	if (!tb[HDR_NOTOUCH])
+		return false;
+
+	return !strcmp(blobmsg_get_string(tb[HDR_NOTOUCH]), "1");
+}
+
 static void __uh_ubus_next_batched_request(struct uloop_timeout *timeout);
 
 static void uh_ubus_next_batched_request(struct client *cl)
@@ -277,7 +293,7 @@ static void uh_ubus_allowed_cb(struct ubus_request *req, int type, struct blob_a
 		*allow = blobmsg_get_bool(tb[SES_ACCESS]);
 }
 
-static bool uh_ubus_allowed(const char *sid, const char *obj, const char *fun)
+static bool uh_ubus_allowed(struct client *cl, const char *sid, const char *obj, const char *fun)
 {
 	uint32_t id;
 	bool allow = false;
@@ -290,6 +306,8 @@ static bool uh_ubus_allowed(const char *sid, const char *obj, const char *fun)
 	blobmsg_add_string(&req, "ubus_rpc_session", sid);
 	blobmsg_add_string(&req, "object", obj);
 	blobmsg_add_string(&req, "function", fun);
+	if (cl && cl->dispatch.ubus.notouch)
+		blobmsg_add_u8(&req, "notouch", 1);
 
 	ubus_invoke(ctx, id, "access", req.head, uh_ubus_allowed_cb, &allow, conf.script_timeout * 500);
 
@@ -379,7 +397,7 @@ static void uh_ubus_handle_get_subscribe(struct client *cl, const char *path)
 
 	sid = uh_ubus_get_auth(cl->hdr.head);
 
-	if (!conf.ubus_noauth && !uh_ubus_allowed(sid, path, ":subscribe")) {
+	if (!conf.ubus_noauth && !uh_ubus_allowed(cl, sid, path, ":subscribe")) {
 		uh_ubus_send_header(cl, 200, "OK", "application/json");
 		uh_ubus_posix_error(cl, EACCES);
 		return;
@@ -582,6 +600,9 @@ static void uh_ubus_send_request(struct client *cl, const char *sid, struct blob
 	}
 
 	blobmsg_add_string(&req, "ubus_rpc_session", sid);
+
+	if (du->notouch)
+		blobmsg_add_u8(&req, "notouch", 1);
 
 	blob_buf_init(&du->buf, 0);
 	memset(&du->req, 0, sizeof(du->req));
@@ -829,7 +850,7 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 			goto error;
 		}
 
-		if (!conf.ubus_noauth && !uh_ubus_allowed(data.sid, data.object, data.function)) {
+		if (!conf.ubus_noauth && !uh_ubus_allowed(cl, data.sid, data.object, data.function)) {
 			err = ERROR_ACCESS;
 			goto error;
 		}
@@ -919,7 +940,7 @@ static void uh_ubus_call(struct client *cl, const char *path, const char *sid)
 		goto error;
 	}
 
-	if (!conf.ubus_noauth && !uh_ubus_allowed(sid, path, data.method)) {
+	if (!conf.ubus_noauth && !uh_ubus_allowed(cl, sid, path, data.method)) {
 		err = ERROR_ACCESS;
 		goto error;
 	}
@@ -1003,6 +1024,8 @@ static void uh_ubus_handle_request(struct client *cl, char *url, struct path_inf
 	chr = strchr(du->url_path, '?');
 	if (chr)
 		chr[0] = '\0';
+
+	du->notouch = uh_ubus_get_notouch(cl->hdr.head);
 
 	du->legacy = false;
 	d->free = uh_ubus_request_free;
