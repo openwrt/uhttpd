@@ -138,18 +138,6 @@ enum http_version {
 	UH_HTTP_VER_1_1,
 };
 
-enum http_user_agent {
-	UH_UA_UNKNOWN,
-	UH_UA_GECKO,
-	UH_UA_CHROME,
-	UH_UA_SAFARI,
-	UH_UA_MSIE,
-	UH_UA_KONQUEROR,
-	UH_UA_OPERA,
-	UH_UA_MSIE_OLD,
-	UH_UA_MSIE_NEW,
-};
-
 enum chunked_state {
 	CHUNKED_OFF,		/* not a chunked request */
 	CHUNKED_FIRST,		/* awaiting the first chunk-size line */
@@ -160,7 +148,6 @@ enum chunked_state {
 struct http_request {
 	enum http_method method;
 	enum http_version version;
-	enum http_user_agent ua;
 	int redirect_status;
 	int content_length;
 	bool expect_cont;
