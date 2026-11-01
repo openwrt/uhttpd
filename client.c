@@ -183,6 +183,31 @@ static int find_idx(const char * const *list, int max, const char *str)
 	return -1;
 }
 
+/*
+ * Locate the first CRLF within the first len bytes of buf, or NULL if there
+ * is none.
+ *
+ * This must not be replaced by strstr(): the ustream read buffer is a fixed
+ * size allocation and whatever an earlier read left behind past its tail is
+ * still in memory. Depending on the expected NUL terminator is not good
+ * enough either - a match beyond the valid data would let the parser write a
+ * NUL byte there and hand a length larger than the buffered data to
+ * ustream_consume(), which aborts() the whole server.
+ */
+static char *find_crlf(char *buf, int len)
+{
+	char *p, *end = buf + len;
+
+	if (len < 2)
+		return NULL;
+
+	for (p = memchr(buf + 1, '\n', len - 1); p; p = memchr(p + 1, '\n', end - p - 1))
+		if (p[-1] == '\r')
+			return p - 1;
+
+	return NULL;
+}
+
 static int client_parse_request(struct client *cl, char *data)
 {
 	struct http_request *req = &cl->request;
@@ -217,7 +242,7 @@ static bool client_init_cb(struct client *cl, char *buf, int len)
 {
 	char *newline;
 
-	newline = strstr(buf, "\r\n");
+	newline = find_crlf(buf, len);
 	if (!newline)
 		return false;
 
@@ -424,20 +449,81 @@ parse_chunksize(char *buf, char *end)
 	if (p == buf)
 		return -1; /* empty size */
 
-	/* skip optional chunk extensions (;name=value) */
-	while (p < end && *p == ';') {
+	/*
+	 * Skip optional chunk extensions. RFC 9112 7.1.1 defines
+	 *
+	 *   chunk-ext      = *( BWS chunk-ext-name [ BWS "=" BWS chunk-ext-val ] )
+	 *   chunk-ext-name = token
+	 *   chunk-ext-val  = token / quoted-string
+	 *
+	 * The extensions mean nothing to us, but they have to be skipped
+	 * correctly: treating a size line carrying one as malformed would stop
+	 * parsing the body of an ordinary, valid request.
+	 */
+	while (p < end) {
+		while (p < end && uh_is_wsp(*p))
+			p++;
+
+		if (p >= end)
+			break;
+
+		if (*p != ';')
+			return -1; /* garbage after size and/or extensions */
+
 		p++;
-		while (p < end && (chartypes[(uint8_t)*p] & (CT_ALPHA | CT_DIGIT)))
+
+		if (p >= end || !uh_is_tchar(*p))
+			return -1; /* empty chunk-ext-name */
+
+		while (p < end && uh_is_tchar(*p))
 			p++;
-		if (p < end && *p == '=') {
+
+		while (p < end && uh_is_wsp(*p))
 			p++;
-			while (p < end && (chartypes[(uint8_t)*p] & (CT_ALPHA | CT_DIGIT)))
+
+		if (p >= end || *p != '=')
+			continue;
+
+		p++;
+
+		while (p < end && uh_is_wsp(*p))
+			p++;
+
+		if (p < end && *p == '"') {
+			/* quoted-string = DQUOTE *( qdtext / quoted-pair ) DQUOTE */
+			bool closed = false;
+
+			for (p++; p < end; p++) {
+				if (*p == '"') {
+					p++;
+					closed = true;
+					break;
+				}
+
+				if (*p == '\\') {
+					p++;
+
+					if (p >= end)
+						break; /* quoted-pair at the end of the line */
+
+					continue;
+				}
+
+				/* qdtext: HTAB / SP / VCHAR, DQUOTE handled above */
+				if (!(chartypes[(uint8_t)*p] & (CT_VCHAR | CT_WSP)))
+					return -1;
+			}
+
+			if (!closed)
+				return -1; /* unterminated quoted-string */
+		} else {
+			if (p >= end || !uh_is_tchar(*p))
+				return -1; /* empty chunk-ext-val */
+
+			while (p < end && uh_is_tchar(*p))
 				p++;
 		}
 	}
-
-	if (p < end)
-		return -1; /* garbage after size and/or extensions */
 
 	return size;
 }
@@ -615,7 +701,7 @@ void client_poll_post_data(struct client *cl)
 			break;
 
 		if (r->transfer_chunked == CHUNKED_TRAILER) {
-			char *tsep = strstr(buf, "\r\n");
+			char *tsep = find_crlf(buf, len);
 
 			if (!tsep)
 				break;
@@ -646,6 +732,10 @@ void client_poll_post_data(struct client *cl)
 		}
 
 		if (r->transfer_chunked == CHUNKED_NEXT) {
+			/* The CRLF terminating the data of the previous chunk must
+			 * actually be buffered: skipping two bytes that are not
+			 * there yet makes the search below start beyond the valid
+			 * data of the read buffer. */
 			if (len < 2)
 				break;
 
@@ -663,7 +753,13 @@ void client_poll_post_data(struct client *cl)
 			offset = 2;
 		}
 
-		sep = strstr(buf + offset, "\r\n");
+		/* a chunk size line is at least one digit plus its CRLF; wait
+		 * for the rest of it instead of searching into buffer bytes
+		 * that hold no request data */
+		if (len < offset + 3)
+			break;
+
+		sep = find_crlf(buf + offset, len - offset);
 		if (!sep)
 			break;
 
@@ -723,7 +819,7 @@ static bool client_header_cb(struct client *cl, char *buf, int len)
 	char *newline;
 	int line_len;
 
-	newline = strstr(buf, "\r\n");
+	newline = find_crlf(buf, len);
 	if (!newline)
 		return false;
 
