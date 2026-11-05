@@ -37,6 +37,23 @@ static struct blob_buf buf;
 #define UH_UBUS_MAX_POST_SIZE	65536
 #define UH_UBUS_DEFAULT_SID	"00000000000000000000000000000000"
 
+/* libubox blob attributes carry a 24 bit length field, so a single blob can
+ * never grow beyond BLOB_ATTR_LEN_MASK (16 MiB) bytes: trying to append more
+ * data makes blob_new() / blobmsg_open_nested() fail. Keep the accumulated
+ * "list" result well below that limit and send a bounded error instead of
+ * continuing to encode into a blob which no longer fits. */
+#define UH_UBUS_MAX_LIST_SIZE	(2 * 1024 * 1024)
+
+/* upper bound of object paths a single "list" request may ask for */
+#define UH_UBUS_MAX_LIST_PATHS	512
+
+/* A JSON-RPC batch is processed one element at a time, but every element
+ * may produce a large response (e.g. an unauthenticated "list" of up to
+ * UH_UBUS_MAX_LIST_SIZE). Hold back the next batch element while more than
+ * this many response bytes are still queued for the peer, so a client which
+ * does not read cannot make the server buffer the output of a whole batch. */
+#define UH_UBUS_MAX_PENDING_WRITE	(256 * 1024)
+
 enum {
 	RPC_JSONRPC,
 	RPC_METHOD,
@@ -74,6 +91,7 @@ struct rpc_data {
 struct list_data {
 	bool verbose;
 	bool add_object;
+	bool failed;
 	struct blob_buf *buf;
 };
 
@@ -204,8 +222,18 @@ static void uh_ubus_send_response(struct client *cl, struct blob_buf *buf)
 		sep = ",";
 
 	str = blobmsg_format_json(buf->head, true);
-	ops->chunk_printf(cl, "%s%s", sep, str);
-	free(str);
+
+	if (str) {
+		ops->chunk_printf(cl, "%s%s", sep, str);
+		free(str);
+	} else {
+		/* still emit a response object, otherwise a single request gets an
+		 * empty body and a batch ends up with a dangling separator */
+		ops->chunk_printf(cl, "%s{\"jsonrpc\":\"2.0\",\"id\":null,"
+		                  "\"error\":{\"code\":%d,\"message\":\"%s\"}}",
+		                  sep, json_errors[ERROR_INTERNAL].code,
+		                  json_errors[ERROR_INTERNAL].msg);
+	}
 
 	du->jsobj_cur = NULL;
 	if (du->array)
@@ -240,7 +268,10 @@ static void uh_ubus_json_rpc_error(struct client *cl, enum rpc_error type)
 	c = blobmsg_open_table(&buf, "error");
 	blobmsg_add_u32(&buf, "code", json_errors[type].code);
 	blobmsg_add_string(&buf, "message", json_errors[type].msg);
-	blobmsg_close_table(&buf, c);
+
+	if (c)
+		blobmsg_close_table(&buf, c);
+
 	uh_ubus_send_response(cl, &buf);
 }
 
@@ -308,7 +339,11 @@ static void uh_ubus_handle_get_list(struct client *cl, const char *path)
 	int rem;
 	int err;
 
-	blob_buf_init(&tmp, 0);
+	if (blob_buf_init(&tmp, 0)) {
+		uh_ubus_send_header(cl, 500, "Internal Server Error", "application/json");
+		uh_ubus_error(cl, -ENOMEM, "Failed to allocate resources");
+		return;
+	}
 
 	err = ubus_lookup(ctx, path, uh_ubus_list_cb, &data);
 	if (err) {
@@ -317,9 +352,28 @@ static void uh_ubus_handle_get_list(struct client *cl, const char *path)
 		return;
 	}
 
-	blob_buf_init(&buf, 0);
-	blob_for_each_attr(cur, tmp.head, rem)
-		blobmsg_add_blob(&buf, cur);
+	if (data.failed) {
+		blob_buf_free(&tmp);
+		uh_ubus_send_header(cl, 500, "Response Too Large", "application/json");
+		uh_ubus_error(cl, -EFBIG, "Response too large");
+		return;
+	}
+
+	if (blob_buf_init(&buf, 0)) {
+		blob_buf_free(&tmp);
+		uh_ubus_send_header(cl, 500, "Internal Server Error", "application/json");
+		uh_ubus_error(cl, -ENOMEM, "Failed to allocate resources");
+		return;
+	}
+
+	blob_for_each_attr(cur, tmp.head, rem) {
+		if (blobmsg_add_blob(&buf, cur) < 0) {
+			blob_buf_free(&tmp);
+			uh_ubus_send_header(cl, 500, "Internal Server Error", "application/json");
+			uh_ubus_error(cl, -ENOMEM, "Failed to encode response");
+			return;
+		}
+	}
 
 	uh_ubus_send_header(cl, 200, "OK", "application/json");
 	uh_ubus_send_response(cl, &buf);
@@ -484,10 +538,14 @@ uh_ubus_request_cb(struct ubus_request *req, int ret)
 			c = blobmsg_open_table(&buf, NULL);
 			blob_for_each_attr(cur, du->buf.head, rem)
 				blobmsg_add_blob(&buf, cur);
-			blobmsg_close_table(&buf, c);
+
+			if (c)
+				blobmsg_close_table(&buf, c);
 		}
 
-		blobmsg_close_array(&buf, r);
+		if (r)
+			blobmsg_close_array(&buf, r);
+
 		uh_ubus_send_response(cl, &buf);
 		return;
 	}
@@ -499,7 +557,10 @@ uh_ubus_request_cb(struct ubus_request *req, int ret)
 		c = blobmsg_open_table(&buf, "error");
 		blobmsg_add_u32(&buf, "code", ret);
 		blobmsg_add_string(&buf, "message", ubus_strerror(ret));
-		blobmsg_close_table(&buf, c);
+
+		if (c)
+			blobmsg_close_table(&buf, c);
+
 		uh_ubus_send_response(cl, &buf);
 	} else {
 		uh_ubus_init_json_rpc_response(cl, &buf);
@@ -507,7 +568,9 @@ uh_ubus_request_cb(struct ubus_request *req, int ret)
 			r = blobmsg_open_table(&buf, "result");
 			blob_for_each_attr(cur, du->buf.head, rem)
 				blobmsg_add_blob(&buf, cur);
-			blobmsg_close_table(&buf, r);
+
+			if (r)
+				blobmsg_close_table(&buf, r);
 		} else {
 			blobmsg_add_field(&buf, BLOBMSG_TYPE_UNSPEC, "result", NULL, 0);
 		}
@@ -606,8 +669,18 @@ static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *o
 	int rem, rem2;
 	void *t, *o=NULL;
 
+	/* Once the response blob has outgrown what a blob attribute can describe,
+	 * all further lookups are dropped: growing a blob beyond BLOB_ATTR_LEN_MASK
+	 * always fails and the nesting cookies handed to blobmsg_close_table() are
+	 * no longer valid offsets into the buffer. */
+	if (data->failed || blob_pad_len(data->buf->head) > UH_UBUS_MAX_LIST_SIZE) {
+		data->failed = true;
+		return;
+	}
+
 	if (!data->verbose) {
-		blobmsg_add_string(data->buf, NULL, obj->path);
+		if (blobmsg_add_string(data->buf, NULL, obj->path) < 0)
+			data->failed = true;
 		return;
 	}
 
@@ -616,12 +689,19 @@ static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *o
 
 	if (data->add_object) {
 		o = blobmsg_open_table(data->buf, obj->path);
-		if (!o)
+		if (!o) {
+			data->failed = true;
 			return;
+		}
 	}
 
 	blob_for_each_attr(sig, obj->signature, rem) {
 		t = blobmsg_open_table(data->buf, blobmsg_name(sig));
+		if (!t) {
+			data->failed = true;
+			break;
+		}
+
 		rem2 = blobmsg_data_len(sig);
 		__blob_for_each_attr(attr, blobmsg_data(sig), rem2) {
 			if (blob_id(attr) != BLOBMSG_TYPE_INT32)
@@ -648,17 +728,18 @@ static void uh_ubus_list_cb(struct ubus_context *ctx, struct ubus_object_data *o
 				break;
 			}
 		}
+
 		blobmsg_close_table(data->buf, t);
 	}
 
-	if (data->add_object)
+	if (data->add_object && o)
 		blobmsg_close_table(data->buf, o);
 }
 
 static bool uh_ubus_valid_list_params(struct blob_attr *params)
 {
 	struct blob_attr *cur;
-	int rem;
+	int rem, count = 0;
 
 	/* non-array params are treated as "list all", as before */
 	if (!params || blob_id(params) != BLOBMSG_TYPE_ARRAY)
@@ -671,52 +752,117 @@ static bool uh_ubus_valid_list_params(struct blob_attr *params)
 	 * such an entry to ubus_lookup() as a C string would cause an
 	 * out-of-bounds read.
 	 */
-	blobmsg_for_each_attr(cur, params, rem)
+	blobmsg_for_each_attr(cur, params, rem) {
 		if (blob_id(cur) != BLOBMSG_TYPE_STRING ||
 		    !blobmsg_check_attr(cur, false))
 			return false;
 
+		/* every entry triggers a separate lookup whose result is appended
+		 * to one blob, so limit how many paths a single request may name
+		 */
+		if (++count > UH_UBUS_MAX_LIST_PATHS)
+			return false;
+	}
+
 	return true;
 }
 
-static bool uh_ubus_send_list(struct client *cl, struct blob_attr *params)
+static bool uh_ubus_list_path_seen(const char **seen, int nseen, const char *path)
 {
-	struct blob_attr *cur, *dup;
+	int i;
+
+	for (i = 0; i < nseen; i++)
+		if (!strcmp(seen[i], path))
+			return true;
+
+	return false;
+}
+
+static bool uh_ubus_send_list(struct client *cl, struct blob_attr *params, enum rpc_error *err)
+{
+	struct blob_attr *cur, *dup = NULL;
 	struct list_data data = { .buf = &cl->dispatch.ubus.buf, .verbose = false, .add_object = true };
+	const char *seen[UH_UBUS_MAX_LIST_PATHS];
+	int rem, nseen = 0;
 	void *r;
-	int rem;
 
-	if (!uh_ubus_valid_list_params(params))
+	if (!uh_ubus_valid_list_params(params)) {
+		*err = ERROR_PARAMS;
 		return false;
+	}
 
-	blob_buf_init(data.buf, 0);
+	if (blob_buf_init(data.buf, 0)) {
+		*err = ERROR_INTERNAL;
+		return false;
+	}
 
 	uh_client_ref(cl);
 
 	if (!params || blob_id(params) != BLOBMSG_TYPE_ARRAY) {
 		r = blobmsg_open_array(data.buf, "result");
-		ubus_lookup(ctx, NULL, uh_ubus_list_cb, &data);
-		blobmsg_close_array(data.buf, r);
-	}
-	else {
+
+		if (!r) {
+			data.failed = true;
+		} else {
+			ubus_lookup(ctx, NULL, uh_ubus_list_cb, &data);
+			blobmsg_close_array(data.buf, r);
+		}
+	} else {
 		r = blobmsg_open_table(data.buf, "result");
-		dup = blob_memdup(params);
-		if (dup)
-		{
+		dup = r ? blob_memdup(params) : NULL;
+
+		if (!r || !dup) {
+			data.failed = true;
+		} else {
 			rem = blobmsg_data_len(dup);
 			data.verbose = true;
-			__blob_for_each_attr(cur, blobmsg_data(dup), rem)
-				ubus_lookup(ctx, blobmsg_data(cur), uh_ubus_list_cb, &data);
+
+			__blob_for_each_attr(cur, blobmsg_data(dup), rem) {
+				const char *path = blobmsg_data(cur);
+
+				/* a repeated path resolves to the very same objects, so look it
+				 * up once instead of appending duplicate result keys and
+				 * growing the response blob without a bound
+				 */
+				if (uh_ubus_list_path_seen(seen, nseen, path))
+					continue;
+
+				if (nseen < UH_UBUS_MAX_LIST_PATHS)
+					seen[nseen++] = path;
+
+				ubus_lookup(ctx, path, uh_ubus_list_cb, &data);
+
+				if (data.failed)
+					break;
+			}
+
 			free(dup);
+			blobmsg_close_table(data.buf, r);
 		}
-		blobmsg_close_table(data.buf, r);
 	}
 
 	uh_client_unref(cl);
 
-	blob_buf_init(&buf, 0);
+	if (data.failed) {
+		blob_buf_free(data.buf);
+		*err = ERROR_INTERNAL;
+		return false;
+	}
+
+	if (blob_buf_init(&buf, 0)) {
+		blob_buf_free(data.buf);
+		*err = ERROR_INTERNAL;
+		return false;
+	}
+
 	uh_ubus_init_json_rpc_response(cl, &buf);
-	blobmsg_add_blob(&buf, blob_data(data.buf->head));
+
+	if (blobmsg_add_blob(&buf, blob_data(data.buf->head)) < 0) {
+		blob_buf_free(data.buf);
+		*err = ERROR_INTERNAL;
+		return false;
+	}
+
 	uh_ubus_send_response(cl, &buf);
 
 	return true;
@@ -838,10 +984,9 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 		goto out;
 	}
 	else if (!strcmp(data.method, "list")) {
-		if (!uh_ubus_send_list(cl, data.params)) {
-			err = ERROR_PARAMS;
+		if (!uh_ubus_send_list(cl, data.params, &err))
 			goto error;
-		}
+
 		goto out;
 	}
 	else {
@@ -858,12 +1003,41 @@ out:
 	uh_client_unref(cl);
 }
 
+static void uh_ubus_batch_stall_cb(struct uloop_timeout *timeout)
+{
+	struct dispatch_ubus *du = container_of(timeout, struct dispatch_ubus, timeout);
+	struct client *cl = container_of(du, struct client, dispatch.ubus);
+
+	/* the peer did not read its pending response within script_timeout;
+	 * give up on the rest of the batch and drop the connection */
+	cl->dispatch.write_cb = NULL;
+	cl->request.connection_close = true;
+	ops->request_done(cl);
+}
+
+static void uh_ubus_batch_write_cb(struct client *cl)
+{
+	if (cl->us->w.data_bytes > UH_UBUS_MAX_PENDING_WRITE)
+		return;
+
+	cl->dispatch.write_cb = NULL;
+	uh_ubus_next_batched_request(cl);
+}
+
 static void __uh_ubus_next_batched_request(struct uloop_timeout *timeout)
 {
 	struct dispatch_ubus *du = container_of(timeout, struct dispatch_ubus, timeout);
 	struct client *cl = container_of(du, struct client, dispatch.ubus);
 	struct json_object *obj = du->jsobj;
 	int len;
+
+	/* resume from uh_ubus_batch_write_cb() once the peer has caught up */
+	if (cl->us->w.data_bytes > UH_UBUS_MAX_PENDING_WRITE) {
+		cl->dispatch.write_cb = uh_ubus_batch_write_cb;
+		du->timeout.cb = uh_ubus_batch_stall_cb;
+		uloop_timeout_set(&du->timeout, conf.script_timeout * 1000);
+		return;
+	}
 
 	len = json_object_array_length(obj);
 	if (du->array_idx >= len)
