@@ -36,7 +36,13 @@
 	__header(user_agent, user-agent) \
 	__header(content_type, content-type) \
 	__header(content_length, content-length) \
+	__header(x_forwarded_for, x-forwarded-for) \
+	__header(x_forwarded_host, x-forwarded-host) \
+	__header(x_forwarded_port, x-forwarded-port) \
+	__header(x_forwarded_proto, x-forwarded-proto) \
 	__header(x_http_method_override, x-http-method-override) \
+	__header(x_real_ip, x-real-ip) \
+	__header(x_real_proto, x-real-proto) \
 	__header(http_auth_user, http-auth-user) \
 	__header(http_auth_pass, http-auth-pass)
 
@@ -68,7 +74,13 @@ static const struct {
 	{ "HTTP_ORIGIN", HDR_origin },
 	{ "HTTP_REFERER", HDR_referer },
 	{ "HTTP_USER_AGENT", HDR_user_agent },
+	{ "HTTP_X_FORWARDED_FOR", HDR_x_forwarded_for },
+	{ "HTTP_X_FORWARDED_HOST", HDR_x_forwarded_host },
+	{ "HTTP_X_FORWARDED_PORT", HDR_x_forwarded_port },
+	{ "HTTP_X_FORWARDED_PROTO", HDR_x_forwarded_proto },
 	{ "HTTP_X_HTTP_METHOD_OVERRIDE", HDR_x_http_method_override },
+	{ "HTTP_X_REAL_IP", HDR_x_real_ip },
+	{ "HTTP_X_REAL_PROTO", HDR_x_real_proto },
 	{ "HTTP_AUTH_USER", HDR_http_auth_user },
 	{ "HTTP_AUTH_PASS", HDR_http_auth_pass },
 	{ "CONTENT_TYPE", HDR_content_type },
