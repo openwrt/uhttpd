@@ -259,6 +259,7 @@ struct dispatch_ubus {
 	bool array;
 	int array_idx;
 	bool legacy; /* Got legacy request => use legacy reply */
+	bool relay; /* Sent through rpcd's session "call" */
 
 	struct ubus_subscriber sub;
 };

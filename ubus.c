@@ -78,6 +78,17 @@ static const struct blobmsg_policy ses_policy[__SES_MAX] = {
 	[SES_ACCESS] = { .name = "access", .type = BLOBMSG_TYPE_BOOL },
 };
 
+enum {
+	RELAY_STATUS,
+	RELAY_DATA,
+	__RELAY_MAX,
+};
+
+static const struct blobmsg_policy relay_policy[__RELAY_MAX] = {
+	[RELAY_STATUS] = { .name = "status", .type = BLOBMSG_TYPE_INT32 },
+	[RELAY_DATA] = { .name = "data", .type = BLOBMSG_TYPE_TABLE },
+};
+
 struct rpc_data {
 	struct blob_attr *id;
 	const char *sid;
@@ -517,13 +528,35 @@ uh_ubus_request_cb(struct ubus_request *req, int ret)
 {
 	struct dispatch_ubus *du = container_of(req, struct dispatch_ubus, req);
 	struct client *cl = container_of(du, struct client, dispatch.ubus);
+	struct blob_attr *data = blob_data(du->buf.head);
+	unsigned int data_len = blob_len(du->buf.head);
+	struct blob_attr *tb[__RELAY_MAX];
 	struct blob_attr *cur;
 	void *r;
 	int rem;
 
-	blob_buf_init(&buf, 0);
-
 	uloop_timeout_cancel(&du->timeout);
+
+	/* A status of the relay itself means the call never reached the
+	 * object; report it as a direct call would have been. */
+	if (du->relay) {
+		blobmsg_parse(relay_policy, __RELAY_MAX, tb, data, data_len);
+
+		if (ret || !tb[RELAY_STATUS] || !tb[RELAY_DATA]) {
+			if (ret == UBUS_STATUS_TIMEOUT)
+				return uh_ubus_json_rpc_error(cl, ERROR_TIMEOUT);
+			else if (ret == UBUS_STATUS_PERMISSION_DENIED)
+				return uh_ubus_json_rpc_error(cl, ERROR_ACCESS);
+
+			return uh_ubus_json_rpc_error(cl, ERROR_OBJECT);
+		}
+
+		ret = blobmsg_get_u32(tb[RELAY_STATUS]);
+		data = blobmsg_data(tb[RELAY_DATA]);
+		data_len = blobmsg_data_len(tb[RELAY_DATA]);
+	}
+
+	blob_buf_init(&buf, 0);
 
 	/* Legacy format always uses "result" array - even for errors and empty
 	 * results. */
@@ -534,9 +567,10 @@ uh_ubus_request_cb(struct ubus_request *req, int ret)
 		r = blobmsg_open_array(&buf, "result");
 		blobmsg_add_u32(&buf, "", ret);
 
-		if (blob_len(du->buf.head)) {
+		if (data_len) {
 			c = blobmsg_open_table(&buf, NULL);
-			blob_for_each_attr(cur, du->buf.head, rem)
+			rem = data_len;
+			__blob_for_each_attr(cur, data, rem)
 				blobmsg_add_blob(&buf, cur);
 
 			if (c)
@@ -564,9 +598,10 @@ uh_ubus_request_cb(struct ubus_request *req, int ret)
 		uh_ubus_send_response(cl, &buf);
 	} else {
 		uh_ubus_init_json_rpc_response(cl, &buf);
-		if (blob_len(du->buf.head)) {
+		if (data_len) {
 			r = blobmsg_open_table(&buf, "result");
-			blob_for_each_attr(cur, du->buf.head, rem)
+			rem = data_len;
+			__blob_for_each_attr(cur, data, rem)
 				blobmsg_add_blob(&buf, cur);
 
 			if (r)
@@ -625,12 +660,31 @@ static void uh_ubus_single_error(struct client *cl, enum rpc_error type)
 	ops->request_done(cl);
 }
 
-static void uh_ubus_send_request(struct client *cl, const char *sid, struct blob_attr *args)
+/* ubusd hides an object from a non-root uhttpd unless /usr/share/acl.d grants
+ * it a method of that object. rpcd's session "call" reaches such an object
+ * under the session ACL, which uh_ubus_allowed() checks here as well. */
+static int uh_ubus_lookup(struct dispatch_ubus *du, const char *object)
+{
+	du->relay = false;
+
+	if (!ubus_lookup_id(ctx, object, &du->obj))
+		return 0;
+
+	if (ubus_lookup_id(ctx, "session", &du->obj))
+		return -1;
+
+	du->relay = true;
+
+	return 0;
+}
+
+static void uh_ubus_send_request(struct client *cl, const char *object, const char *sid, struct blob_attr *args)
 {
 	struct dispatch *d = &cl->dispatch;
 	struct dispatch_ubus *du = &d->ubus;
 	struct blob_attr *cur;
 	static struct blob_buf req;
+	void *data = NULL;
 	int ret, rem;
 
 	blob_buf_init(&req, 0);
@@ -638,17 +692,27 @@ static void uh_ubus_send_request(struct client *cl, const char *sid, struct blob
 	if (args && blobmsg_type(args) != BLOBMSG_TYPE_TABLE)
 		return uh_ubus_json_rpc_error(cl, ERROR_PARAMS);
 
+	if (du->relay) {
+		blobmsg_add_string(&req, "object", object);
+		blobmsg_add_string(&req, "method", du->func);
+		data = blobmsg_open_table(&req, "data");
+	}
+
 	blobmsg_for_each_attr(cur, args, rem) {
 		if (!strcmp(blobmsg_name(cur), "ubus_rpc_session"))
 			return uh_ubus_json_rpc_error(cl, ERROR_PARAMS);
 		blobmsg_add_blob(&req, cur);
 	}
 
+	if (du->relay)
+		blobmsg_close_table(&req, data);
+
 	blobmsg_add_string(&req, "ubus_rpc_session", sid);
 
 	blob_buf_init(&du->buf, 0);
 	memset(&du->req, 0, sizeof(du->req));
-	ret = ubus_invoke_async(ctx, du->obj, du->func, req.head, &du->req);
+	ret = ubus_invoke_async(ctx, du->obj, du->relay ? "call" : du->func,
+	                        req.head, &du->req);
 	if (ret)
 		return uh_ubus_json_rpc_error(cl, ERROR_INTERNAL);
 
@@ -970,7 +1034,7 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 			goto error;
 
 		du->func = data.function;
-		if (ubus_lookup_id(ctx, data.object, &du->obj)) {
+		if (uh_ubus_lookup(du, data.object)) {
 			err = ERROR_OBJECT;
 			goto error;
 		}
@@ -980,7 +1044,7 @@ static void uh_ubus_handle_request_object(struct client *cl, struct json_object 
 			goto error;
 		}
 
-		uh_ubus_send_request(cl, data.sid, data.data);
+		uh_ubus_send_request(cl, data.object, data.sid, data.data);
 		goto out;
 	}
 	else if (!strcmp(data.method, "list")) {
@@ -1088,7 +1152,7 @@ static void uh_ubus_call(struct client *cl, const char *path, const char *sid)
 		goto error;
 
 	du->func = data.method;
-	if (ubus_lookup_id(ctx, path, &du->obj)) {
+	if (uh_ubus_lookup(du, path)) {
 		err = ERROR_OBJECT;
 		goto error;
 	}
@@ -1098,7 +1162,7 @@ static void uh_ubus_call(struct client *cl, const char *path, const char *sid)
 		goto error;
 	}
 
-	uh_ubus_send_request(cl, sid, data.params);
+	uh_ubus_send_request(cl, path, sid, data.params);
 	goto out;
 
 error:
