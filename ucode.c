@@ -197,7 +197,8 @@ uh_ucode_urlencode(uc_vm_t *vm, size_t nargs)
 static uc_parse_config_t config = {
 	.strict_declarations = false,
 	.lstrip_blocks = true,
-	.trim_blocks = true
+	.trim_blocks = true,
+	.setup_signal_handlers = true
 };
 
 static void
