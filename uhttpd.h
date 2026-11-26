@@ -98,6 +98,7 @@ struct config {
 	int max_connections;
 	int http_keepalive;
 	int script_timeout;
+	int script_grace;
 	int ubus_noauth;
 	int ubus_cors;
 	int cgi_prefix_len;
@@ -229,6 +230,7 @@ struct dispatch_proc {
 	struct relay r;
 	int status_code;
 	char status_msg[64];
+	bool terminating;
 };
 
 struct dispatch_handler {
@@ -351,6 +353,8 @@ void client_poll_post_data(struct client *cl);
 void uh_client_read_cb(struct client *cl);
 void uh_client_notify_state(struct client *cl);
 int uh_source_script_count(const struct uh_addr *addr);
+void uh_script_slot_hold(void);
+void uh_script_slot_release(void);
 
 void uh_auth_add(const char *path, const char *user, const char *pass);
 bool uh_auth_check(struct client *cl, const char *path, const char *auth,

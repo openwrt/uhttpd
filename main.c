@@ -175,6 +175,8 @@ static int usage(const char *name)
 		"	-y alias[=path]	URL alias handle\n"
 		"	-i .ext=path    Use interpreter at path for files with the given extension\n"
 		"	-t seconds      CGI, Lua and UBUS script timeout in seconds, default is 60\n"
+		"	-g seconds      Time a script process gets to exit after SIGTERM before\n"
+		"	                it is killed with SIGKILL, default is 1, 0 kills at once\n"
 		"	-T seconds      Network timeout in seconds, default is 30\n"
 		"	-k seconds      HTTP keepalive timeout\n"
 		"	-A seconds      TCP keepalive timeout, default is unset\n"
@@ -189,6 +191,7 @@ static int usage(const char *name)
 static void init_defaults_pre(void)
 {
 	conf.script_timeout = 60;
+	conf.script_grace = 1;
 	conf.network_timeout = 30;
 	conf.http_keepalive = 20;
 	conf.max_script_requests = 3;
@@ -314,7 +317,7 @@ int main(int argc, char **argv)
 	init_defaults_pre();
 	signal(SIGPIPE, SIG_IGN);
 
-	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qQ:Rr:Ss:T:t:U:u:Xx:W:y:")) != -1) {
+	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fg:h:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qQ:Rr:Ss:T:t:U:u:Xx:W:y:")) != -1) {
 		switch(ch) {
 #ifdef HAVE_TLS
 		case 'C':
@@ -453,6 +456,10 @@ int main(int argc, char **argv)
 
 		case 't':
 			conf.script_timeout = atoi(optarg);
+			break;
+
+		case 'g':
+			conf.script_grace = atoi(optarg);
 			break;
 
 		case 'T':

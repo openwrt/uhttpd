@@ -324,6 +324,18 @@ static void proc_timeout_cb(struct uloop_timeout *timeout)
 	struct dispatch_proc *proc = container_of(timeout, struct dispatch_proc, timeout);
 	struct client *cl = container_of(proc, struct client, dispatch.proc);
 
+	/*
+	 * Ask the script to stop first and only kill it when it is still
+	 * running after the grace period. Its output is still relayed in
+	 * the meantime, so a script that finishes gets its response out.
+	 */
+	if (conf.script_grace > 0 && !proc->terminating && proc->r.proc.pending) {
+		proc->terminating = true;
+		kill(proc->r.proc.pid, SIGTERM);
+		uloop_timeout_set(timeout, conf.script_grace * 1000);
+		return;
+	}
+
 	uh_relay_kill(cl, &proc->r);
 }
 
@@ -336,6 +348,7 @@ bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
 	int pid;
 
 	blob_buf_init(&proc->hdr, 0);
+	proc->terminating = false;
 	proc->status_code = 200;
 	strcpy(proc->status_msg, "OK");
 
@@ -363,6 +376,7 @@ bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
 
 		uh_close_fds();
 		signal(SIGPIPE, SIG_DFL);
+		signal(SIGTERM, SIG_DFL);
 		cb(cl, pi, url);
 		exit(0);
 	}

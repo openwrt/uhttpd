@@ -771,12 +771,21 @@ uh_invoke_script(struct client *cl, struct dispatch_handler *d, char *url, struc
 	d->handle_request(cl, url, pi);
 }
 
-static void uh_complete_request(struct client *cl)
+/*
+ * A script process that outlives its client (see uh_relay_free()) keeps
+ * holding a slot of the pool until it has exited, so terminating requests
+ * cannot pile up beyond max_script_requests.
+ */
+void uh_script_slot_hold(void)
+{
+	n_requests++;
+}
+
+void uh_script_slot_release(void)
 {
 	struct deferred_request *dr;
+	struct client *cl;
 
-	/* release this client's slot before it is reused below */
-	cl->script = false;
 	n_requests--;
 
 	while (n_requests < conf.max_script_requests) {
@@ -807,6 +816,13 @@ static void uh_complete_request(struct client *cl)
 		client_poll_post_data(cl);
 		ustream_poll(cl->us);
 	}
+}
+
+static void uh_complete_request(struct client *cl)
+{
+	/* release this client's slot before it is reused */
+	cl->script = false;
+	uh_script_slot_release();
 }
 
 
