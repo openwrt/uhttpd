@@ -20,16 +20,69 @@
 #include <signal.h>
 #include "uhttpd.h"
 
+struct relay_reaper {
+	struct uloop_process proc;
+	struct uloop_timeout timeout;
+};
+
+static void relay_reaper_exit_cb(struct uloop_process *proc, int ret)
+{
+	struct relay_reaper *rr = container_of(proc, struct relay_reaper, proc);
+
+	uloop_timeout_cancel(&rr->timeout);
+	free(rr);
+	uh_script_slot_release();
+}
+
+static void relay_reaper_timeout_cb(struct uloop_timeout *timeout)
+{
+	struct relay_reaper *rr = container_of(timeout, struct relay_reaper, timeout);
+
+	kill(rr->proc.pid, SIGKILL);
+}
+
+/*
+ * Stop a script process whose client is gone: send SIGTERM, so the script
+ * gets a chance to finish or roll back what it is doing, and SIGKILL once
+ * the grace period has passed. The process keeps its script slot until it
+ * has exited.
+ */
+static void relay_terminate(int pid)
+{
+	struct relay_reaper *rr;
+
+	if (conf.script_grace <= 0 || !(rr = calloc(1, sizeof(*rr)))) {
+		kill(pid, SIGKILL);
+		return;
+	}
+
+	kill(pid, SIGTERM);
+
+	rr->proc.pid = pid;
+	rr->proc.cb = relay_reaper_exit_cb;
+	uloop_process_add(&rr->proc);
+
+	rr->timeout.cb = relay_reaper_timeout_cb;
+	uloop_timeout_set(&rr->timeout, conf.script_grace * 1000);
+
+	uh_script_slot_hold();
+}
+
 void uh_relay_free(struct relay *r)
 {
+	bool pending;
+
 	if (!r->cl)
 		return;
 
-	if (r->proc.pending)
-		kill(r->proc.pid, SIGKILL);
+	pending = r->proc.pending;
 
 	uloop_timeout_cancel(&r->timeout);
 	uloop_process_delete(&r->proc);
+
+	if (pending)
+		relay_terminate(r->proc.pid);
+
 	ustream_free(&r->sfd.stream);
 	close(r->sfd.fd.fd);
 
